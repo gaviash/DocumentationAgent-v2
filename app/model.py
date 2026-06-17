@@ -4,6 +4,7 @@ from openinference.instrumentation.llama_index import LlamaIndexInstrumentor
 from langfuse import get_client,propagate_attributes
 from dotenv import load_dotenv
 from datetime import datetime
+from typing import Any
 import os
 import json
 
@@ -65,10 +66,18 @@ async def query(msg : str,llm,workflow_run_id,tag):
     return response.message.content
 
 
-async def query_json(msg : str,llm,workflow_run_id,tag):
-    response = await query(msg=msg,llm=llm,workflow_run_id=workflow_run_id,tag=tag)
-    #catcher l'erreur si json non valide et reessayer,max 2 fois - ecrire dans le tag que c'est un deuxieme essai pour le logging langfuse
-    response = clean_json_response(response) #on clean et on load.Manque le try + except
-    response = json.loads(response)
+async def query_json(msg : str,llm,workflow_run_id,tag)-> dict[Any,Any]:
+    edit_tag = tag
+    while True :
+        try :
+            response = await query(msg=msg,llm=llm,workflow_run_id=workflow_run_id,tag=edit_tag)
+            response = clean_json_response(response) #on clean et on load.Manque le try + except
+            response = json.loads(response)
+            break
+        except json.JSONDecodeError as e :
+            print("\n\nLogging Error :" + e.msg + "\n\n")
+            edit_tag="2nd:"+ edit_tag #catcher l'erreur si json non valide et reessayer,(ptet max 2 fois) - ecrire dans le tag que c'est un deuxieme essai pour le logging langfuse
+            continue
+    
     return response
     
