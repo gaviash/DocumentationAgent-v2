@@ -71,12 +71,12 @@ async def query_json(msg : str,llm,workflow_run_id,tag)-> dict[Any,Any]:
     while True :
         try :
             response = await query(msg=msg,llm=llm,workflow_run_id=workflow_run_id,tag=edit_tag)
-            response = clean_json_response(response) #on clean et on load.Manque le try + except
+            response = clean_json_response(response) #on clean et on load.
             response = json.loads(response)
             break
         except json.JSONDecodeError as e :
             print("\n\nLogging Error :" + e.msg + "\n\n")
-            edit_tag="2nd:"+ edit_tag #catcher l'erreur si json non valide et reessayer,(ptet max 2 fois) - ecrire dans le tag que c'est un deuxieme essai pour le logging langfuse
+            edit_tag="2nd:"+ edit_tag #catcher l'erreur si json non valide et reessayer,(ptet max 2 fois) - on ecrit dans le tag que c'est un deuxieme essai(ou plus->compteur ? ) pour le logging langfuse
             continue
     
     return response
