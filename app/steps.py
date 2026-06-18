@@ -13,8 +13,9 @@ Premiere etape poser questions,avec une ou deux requetes reucperer un json du ge
 ce meme json sera simplifié et reinjecté a chaque prompt ecrivain
 """
 from collections.abc import Callable
+from model import query,query_json,first_model
 
-def ask_all_questions(ask_func: Callable)-> dict:
+async def ask_all_questions(ask_func: Callable)-> dict[str,str]:
     """Poser et recuperer toutes les questions necessaires"""
     response = dict() 
     questions = [
@@ -22,7 +23,9 @@ def ask_all_questions(ask_func: Callable)-> dict:
         "Quel niveau de detail ? Beaucoup de details (low level), moyen (mid-level), ou une vue plus generale(high-level) ?",
         "Inclure un diagramme mermaid ?",
         "Quel format de sortie ? docx,odt,md,ou txt ?",
-        "Qui est le public visé ?"
+        "Qui est le public visé ?",
+        "Ya t'il un objectif particulier pour cette documentation ?",
+        "Avez vous des precisions a ajouter ?"
     ]
     for question in questions :
         response[question] = ask_func(question)
@@ -30,5 +33,26 @@ def ask_all_questions(ask_func: Callable)-> dict:
     return response
 
 
-def get_json_response(ask_all_questions:Callable) -> dict: 
+async def get_json_resume(ask_all_questions:Callable,workflow_run_id : str) -> dict[str,str]: 
     """Fonction qui va recuperer toutes les reponses,va faire un call,puis agreger les reponses dans un json."""
+    msg = f"""Voici un json/dictionnaire de questions reponses : f{await ask_all_questions(terminal_ask)}.Transforme le 
+    en un dictionnaire abrégé de cette forme a partir des reponses de celui-ci :
+    {{
+        "taille" : reponses possibles : ["tres petite","petite","moyenne","grande"],
+        "niveau de detail" : ["low-level","mid-level","high-level"],
+        "diagramme" : "["oui","non"],
+        "format" : ["docx","odt","md","txt"],
+        "public visé" : "reponse libre mais bien abrégée",
+        "objectif" : "reponse libre mais abrégée",
+        "commentaires" : "reponse libre."
+    }}
+    Voila le debut,complete le json :
+    {{
+    """
+    res = await query_json(msg=msg,llm=first_model,workflow_run_id=workflow_run_id,tag="resuming json user answers") 
+    return res 
+
+
+def terminal_ask(question : str)-> str:
+    res = input("\n" + question + "\n")
+    return res
