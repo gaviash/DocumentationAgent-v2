@@ -1,0 +1,40 @@
+explorer la codebase :
+Lister les fichiers/dossiers a explorer grace au gitignore.
+Creer programmatiquement un arbre json qui liste dossiers,fichiers enfants,tous les fichiers enfants ont leur valeurs associées.
+ en taille en octets (ex : "main.py" : 320).(on va surement ajouter un dictionnaire de metadata a chaque fichier)
+ exclure assets et tests
+
+
+En cas de non-Readme ou de Readme tres peu suffisant 
+(demander au LLM si il est suffisant,mettre des garde-fou : il faut le considerer comme pas assez si il ne parle que de specifications techniques sans parler du projet/code en lui meme)
+,Fournir l'arbre et demander au llm un json de la taille qu'il veut(max5-10 fichiers) 
+avec les chemins des fichiers principaux pour realiser un resume propre/essentiel a partir de ces 10 la.
+
+Fournir un resumé general/apercu du de la codebase(grace au readme si il existe,ou avec le resume fait maison),des composants 
+et des questions utilisateurs a un premier appel LLM
+-> LLM repond en proposant 3 approches (json)
+user choisit une approche -> on renvoie au LLM le résumé du projet + approche choisie en lui demandant de rediger un plan dans un json bien sur
+
+Ensuite on realise un deuxieme repertoire qui realise un resume de tous les fichiers relevant,pour avoir une source de verité unique pour la suite
+Cette etape est une etape a part entiere,on doit y realiser tout un travail de tri,a partir de l'arbre de fichier cree au debut
+on evite un maximum les dossiers de test,on exclut les assets(comme fait plus haut)
+Approches : 
+
+-pour determiner si un fichier est relevant,on demande si le fichier/un certain dossier a l'air important,en donnant les 10 premieres lignes du/des fichiers
+(ca m'a pas du tout l'air efficace en cas de codebase enorme mais je note les idées)
+
+-Peut-etre un system de scoring ? avec malus gros fichier,bonus importance git,bonus modules import/importé,bonus d'extension fichier,malus lockfile,etc etc
+
+-Peut-etre des le debut realiser une analyse de framework/entrypoint/frameworks/language,pour recup automatiquement certains fichiers toujours
+relevant aux circonstances
+
+
+
+
+Comme on possede le plan,on peut surement en profiter pour assoicer les fichiers relevant aux sections concernées
+
+
+
+
+
+Chaque prompt de writer -> injection des demandes de l'utilisateur + infos necessaires a sa section + prompt sur comment ecrire
