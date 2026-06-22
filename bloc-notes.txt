@@ -1,3 +1,44 @@
+flow :
+brainstorm -> json de reponse et de specs 
+exploration -> json de documents/arbre
+plan(gros modele de preference) -> readme + 2-10 fichiers les plus pertinents + codebase_map -> propose 3 approches + resume reutilisable ? -> 
+user -> autre appel LLM pour recuperer le json du plan choisi(dispo ci dessous),en injectant le resume du readme + des 2-10 fichiers,avec la map.Plan détaillé avec commentaires,contenu de la section,etc.
+scoring + resume + association -> on calcule le score,si c'est bon,resume qu'on met dans le json du document -> dans le meme appel ou dans un deuxieme,on demande
+a quelle section ce fichier correspond -> on le note dans le json du plan 
+writing -> chaque section/sous-section est ecrite par un agent qui a le plan de sa section + le resume des documents relevant
+Review -> renvoi d'un json de modifications
+transformation en docx
+
+
+
+
+
+IMPORTANT : preciser dans le readme final et dans le cahier des charges,qu'il faut imperativement renseigner le dossier ou il y a le gitignore,sinon pas de detecttion
+
+Suite : systeme de scoring
+
+mini résumé pour planner : 
+Comme ecrit en bas, on utilise readme + les 2-10 fichiers les plus pertinents pour demander 3 approches de plan(le prompt du plandoit dire 
+qu'il n'y a pas la totalité des fichiers,et donner la codebase map),
+les 3 approches sont des approches texte simple
+user choisit,puis on demande une version json du plan avec {
+    Section 1 : {
+        nom : "",
+        taille(approximative) : "",
+        diagramme : oui/non,
+        "Commentaire/contenu de la section" : ""
+        fichier concernés : (ce sera mis dans l'etape suivante) []
+    }
+}
+ on stocke le resume(potentiellement ecrire les fichiers relevant,mais je prefere associer les fichiers aux sections dans l'etape du scoring)
+
+Puis : scoring,et si le scoring est validé,on resume le fichier + on l'associe a la ou les sections correspondantes du plan 
+(on mets les noms des fichiers dans  la section "fichier concernés")
+
+Et ensuite dans l'ecriture des sections,on injecte les resume des documents correspondants/necessaires a l'ecriture dans le prompt
+
+
+
 explorer la codebase :
 Lister les fichiers/dossiers a explorer grace au gitignore.
 Creer programmatiquement un arbre json qui liste dossiers,fichiers enfants,tous les fichiers enfants ont leur valeurs associées.
