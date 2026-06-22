@@ -24,6 +24,17 @@ first_model = Ollama(
     }
 )
 
+fast_model=Ollama(
+    model=str(os.getenv("REVIEW_MODEL")),
+    base_url="https://ollama.com",
+    temperature=0.1,
+    context_window=64000,
+    json_mode=True,
+    headers={
+        "Authorization": f"Bearer {os.getenv('OLLAMA_API_KEY')}"
+    }
+)
+
 
 def clean_json_response(content: str) -> str:
     content = content.strip()

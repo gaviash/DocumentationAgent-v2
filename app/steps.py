@@ -25,6 +25,7 @@ async def ask_all_questions(ask_func: Callable)-> dict[str,str]:
         "Quel format de sortie ? docx,odt,md,ou txt ?",
         "Qui est le public visé ?",
         "Ya t'il un objectif particulier pour cette documentation ?",
+        "Des fichiers/sections a exclure de la documentation ?",
         "Avez vous des precisions a ajouter ?"
     ]
     for question in questions :
@@ -44,6 +45,7 @@ async def get_json_resume(ask_all_questions:Callable,workflow_run_id : str) -> d
         "format" : ["docx","odt","md","txt"],
         "public visé" : "reponse libre mais bien abrégée",
         "objectif" : "reponse libre mais abrégée",
+        "Exclusion" : "soit les noms des fichiers,soit une exclusion generale au niveau de la redaction",
         "commentaires" : "reponse libre."
     }}
     Voila le debut,complete le json :

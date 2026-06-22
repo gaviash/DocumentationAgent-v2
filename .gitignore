@@ -6,3 +6,4 @@ docs
 .ruff_cache
 docsgen
 test.py
+process
