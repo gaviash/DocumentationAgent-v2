@@ -14,6 +14,7 @@ ce meme json sera simplifié et reinjecté a chaque prompt ecrivain
 """
 from collections.abc import Callable
 from model import query,query_json,first_model
+from utils import terminal_ask
 
 async def ask_all_questions(ask_func: Callable)-> dict[str,str]:
     """Poser et recuperer toutes les questions necessaires"""
@@ -51,10 +52,6 @@ async def get_json_resume(ask_all_questions:Callable,workflow_run_id : str) -> d
     Voila le debut,complete le json :
     {{
     """
-    res = await query_json(msg=msg,llm=first_model,workflow_run_id=workflow_run_id,tag="resuming json user answers") 
+    res = query_json(msg=msg,llm=first_model,workflow_run_id=workflow_run_id,tag="resuming json user answers") 
     return res 
 
-
-def terminal_ask(question : str)-> str:
-    res = input("\n" + question + "\n")
-    return res

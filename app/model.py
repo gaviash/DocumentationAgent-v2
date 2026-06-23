@@ -51,7 +51,7 @@ def clean_json_response(content: str) -> str:
     return content
 
 
-async def query(msg : str,llm,workflow_run_id,tag):
+def query(msg : str,llm,workflow_run_id,tag):
     metadata={
         "workflow_run_id" : workflow_run_id,
         "name/tag" : tag,
@@ -70,18 +70,18 @@ async def query(msg : str,llm,workflow_run_id,tag):
             trace_name= f"{datetime.now().hour}:{datetime.now().minute}-{tag}-{workflow_run_id[:4]}",
             metadata=metadata
         ) :
-            response = await llm.achat([ChatMessage(content = msg)])
+            response = llm.chat([ChatMessage(content = msg)])
         
         observation.update(output=str(response))
     langfuse.flush()
     return response.message.content
 
 
-async def query_json(msg : str,llm,workflow_run_id,tag)-> dict[Any,Any]:
+def query_json(msg : str,llm,workflow_run_id,tag)-> dict[Any,Any]:
     edit_tag = tag
     while True :
         try :
-            response = await query(msg=msg,llm=llm,workflow_run_id=workflow_run_id,tag=edit_tag)
+            response = query(msg=msg,llm=llm,workflow_run_id=workflow_run_id,tag=edit_tag)
             response = clean_json_response(response) #on clean et on load.
             response = json.loads(response)
             break
