@@ -127,8 +127,10 @@ def terminal_ask(question : str)-> str:
     return res
 
 
-def readme_usefulness(database : dict,workflow_id : str) -> str | dict :
-    if "readme.md" not in database["files"] or database["files"]["readme.md"]["lines_count"] < 2:
+def readme_usefulness(database : dict,workflow_id : str) -> str :
+    if "readme.md" not in database["files"] :
+        return "empty"
+    if database["files"]["readme.md"]["lines_count"] < 2:
         database["files"]["readme.md"]["resume"] = "No content"
         database["files"]["readme.md"]["score"] = 0
         return "empty"
@@ -136,7 +138,7 @@ def readme_usefulness(database : dict,workflow_id : str) -> str | dict :
         above = True
         if database["files"]["readme.md"]["lines_count"] <= 100 :
             above = False 
-        msg = f"""Ta tache est de determiner et evalluer si le readme.md d'une codebase est utile,inutile,ou insuffisant.
+        msg = f"""Ta tache est de determiner et evaluer si le readme.md d'une codebase est utile,inutile,ou insuffisant.
         Tu dois classer le README dans une seule de ces categories :
         - "utile"
         - "insuffisant"
@@ -176,7 +178,7 @@ def readme_usefulness(database : dict,workflow_id : str) -> str | dict :
         - 71 a 100 : utile
         
         Dans raison,tu ecris le raisonnement qui t'as mené a tes choix.
-        {"Dans resume,ecris un resume complet du readme,uniquement si il etait utile ou insuffisant" if above else "Laisse le champ resume vide"}
+        {"Dans resume,ecris un resume complet du readme,uniquement si il etait utile ou insuffisant.Le resume doit etre exhaustif du readme,et contenir un max d'infos." if above else "Laisse le champ resume vide"}
         Voila le readme a evaluer : 
         \"\"\"
         {Path(database['files']['readme.md']['path']).read_text("utf-8")}
@@ -191,9 +193,44 @@ def readme_usefulness(database : dict,workflow_id : str) -> str | dict :
         
         print(f"\n\n DEBUG \n Raison : {res['raison']} \n")
         
-        if above and res["status"] == "utile" or res["status"] == "insuffisant":
+        if above and (res["status"] == "utile" or res["status"] == "insuffisant"):
             database["files"]["readme.md"]["resume"] = res["resume"]
             
-        return res
+        return res["status"]
         
+def get_meaningful_list(database : dict,readme_status : str,workflow_id : str) -> dict:
+    #func pour gerer le comportement avec le readme
+    msg = f"""Ton but est de fournir une liste des 2-7 fichiers les plus coherents parmi l'arborescence ci-dessous.Choisis les fichiers qui vont donner les infos necessaires pour permettre de construire un plan de 
+        redaction de documentation de la codebase.Tu reflechis aux fichiers qui permettent de saisir le plus du projet.Des entrypoints api,des fichiers main,etc etc,tu es capable de bien reflechir.
+        {handle_usefulness_response(database=database,readme_status=readme_status)}
+        
+        Voila l'arborescence des fichiers de la codebase :
+        
+        {json.dumps(database['tree'],indent=2,ensure_ascii=False)}
+        
+        La sortie que tu dois produire est uniquement un json de cette forme :
+        {{
+            "num_fichiers":[2-7],
+            1 : <chemin>,
+            2 : <chemin>,
+            etc,pour le nombre de fichier que tu as choisi.
+        }}
+        
+        
+        """
+    return query_json(msg=msg,llm=first_model,workflow_run_id=workflow_id,tag="choosing_files")
+
+
+def handle_usefulness_response(database : dict,readme_status : str) -> str | None :
+    msg_utile = "le contenu est fiable et qu'il peut servir de base consequente."
+    msg_insuffisant = "le contenu est fiable mais manque totalement d'informations."
+    if readme_status == "empty" or readme_status == "inutile":
+        return "Le readme est vide/n'existe pas/est totalement inutile,ce n'est pas une source de confiance,on ne l'utilise pas."
+    elif (readme_status == "utile" or readme_status == "insuffisant") and database["files"]["readme.md"]["resume"] == "":
+        return f"Voici le contenu du readme : {Path(database['files']['readme.md']['path']).read_text()},il a été considéré comme {readme_status},donc considere bien que {msg_utile if readme_status == 'utile' else msg_insuffisant}."
+    elif (readme_status == "utile" or readme_status == "insuffisant") and database["files"]["readme.md"]["resume"] != "":
+        return f"Le readme a été considéré comme {readme_status},donc considere bien que {msg_utile if readme_status == 'utile' else msg_insuffisant}.Son resume se trouve dans l'entree resume de son objet dans l'arborescence"
     
+    
+#fonction utilitaire d'exploration et de scoring,qui peut prendre une liste de fichiers specifiques en argument,ou aucun(dans ce cas la on explorera tout le repo),
+# et resume + score ces fichiers, evitant de rescorer ou de re-resumer ceux deja résumés et scorés

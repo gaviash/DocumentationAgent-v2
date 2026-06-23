@@ -164,6 +164,7 @@ Une phase de review doit ensuite verifier :
 - la clarte ;
 - les sections faibles.
 
+**Remarque : aucun async pour l'instant,car la seule chose que l'on attend,ce sont les llm calls,mais Ollama cloud en free tier ne les accepte pas en parallelles.Avec une clé api payante,demandez a votre agent préféré de modifier tout le repo pour le faire passer en async sur les requetes,et le temps gagné devrait exploser !**
 ## Exclusions
 
 L'exploration doit respecter le `.gitignore` du projet analyse.
