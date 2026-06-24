@@ -55,3 +55,20 @@ async def get_json_resume(ask_all_questions:Callable,workflow_run_id : str) -> d
     res = query_json(msg=msg,llm=first_model,workflow_run_id=workflow_run_id,tag="resuming json user answers") 
     return res 
 
+"""
+Step 1 (brainstorm) : 
+-> res = get json resume 
+step 2 (inventory & planning)
+-> database = make_inventory
+-> list = get_meaningful_list(readme_usefulness)
+-> resuming_meaningful_list(list & database)
+-> get plan(database + readme + resume meaningful, +instructions utilisateurs(res)) -> choix user
+step 3 (exploring):
+-> associer les 2-7 fichiers non associés aux sections(fonction mult_score_resume_associate qui appelle plusieurs fois la fonction one shot)
+-> explorer l'ensemble de la codebase et scorer,puis resumer et associer (sauf ceux deja resumés et scorés)
+-> quand il y a association,a ce moment la,stocker dans un endroit facile d'acces les fichiers concernés par chaque section
+step 4 (writing):
+-> faire ecrire chaque section avec les injections de resume
+->  
+"""
+

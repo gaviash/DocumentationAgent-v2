@@ -8,15 +8,15 @@ SCORE_SEUIL_HAUT = 70
 SCORE_SEUIL_BAS = 40
 
 path_bonuses = {
-    "src/" : 40,
-    "app/" : 40,
-    "lib/" : 35,
-    "server/": 35,
-    "docs/" : 25,
-    "routes/" : 25,
-    "config/" : 20,
-    "scripts/" : 10,
-    ".github/" : 20,
+    "src" : 40,
+    "app" : 40,
+    "lib" : 35,
+    "server": 35,
+    "docs" : 25,
+    "routes" : 25,
+    "config" : 20,
+    "scripts" : 10,
+    ".github" : 20,
 }
 name_bonuses = {
     "main" : 30,
@@ -292,18 +292,28 @@ def handle_usefulness_response(database : dict,readme_status : str) -> str | Non
         return f"Voici le contenu du readme : {Path(database['files']['readme.md']['path']).read_text()},il a été considéré comme {readme_status},donc considere bien que {msg_utile if readme_status == 'utile' else msg_insuffisant}."
     elif (readme_status == "utile" or readme_status == "insuffisant") and database["files"]["readme.md"]["resume"] != "":
         return f"Le readme a été considéré comme {readme_status},donc considere bien que {msg_utile if readme_status == 'utile' else msg_insuffisant}.Son resume se trouve dans l'entree resume de son objet dans l'arborescence"
+
+def discover_and_adapt_environment(): #apres readme,avant score et avant get_meaningful_list -> remplit des metadata dans la database a propos de la codebase -> stack du projet et choix des listes de bonus malus pour le score,(ces listes détaillées
+    #seront détaillés et crees par codex,pour ne rien oublier)
+    #potentiellement les fichiers essentiels a ce projet.A decider si la decouverte de la stack doit se faire par code ou par llm call.
+    pass
     
-    
-def score_resume_associate(database : dict,filepath : str | Path,mode : str): 
+def score_resume_associate(database : dict,filepath : Path,mode : str): 
     #si mode = full,on fait tout,si mode = associate,on ne refait pas scoring + resume,juste on associe,et si mode = classic,on score et on resume,sans associer.Ex pour les documents d'infos du planner,en mode classique,apres 
-    #le planner,en mode full sur tous les fichiers,et les fichiers resumés pour le planner,mais qui n'ont pas pu etre associés par ce que le plan n'existait pas,on relancera en mode associer. 
+    #le planner,en mode full sur tous les fichiers,et les fichiers resumés pour le planner,mais qui n'ont pas pu etre associés par ce que le plan n'existait pas,on relancera en mode associer.mode resumé on resume uniquement 
+    if mode == "resume" :
+        #en cours
+    
     return 1
 
+def create_plan(database) :
+    
 
 def score(metadata : dict,filepath : Path):
     #location part
     scorer = 0
     folders = filepath.parts[:-1]
+    #print(folders)
     best = 0
     for folder in folders :
         val = path_bonuses.get(folder,0)
@@ -335,9 +345,22 @@ def score(metadata : dict,filepath : Path):
     
     return scorer
    
-
+def score_calibration(database : dict):
+    for file in database["files"] :
+        sc = score(database["files"][file],Path(database["files"][file]["path"]))
+        #print(sc)
+        database["files"][file]["score"] = sc
+    return database
 #fonction utilitaire d'exploration et de scoring,qui peut prendre une liste de fichiers specifiques en argument,ou aucun(dans ce cas la on explorera tout le repo),
 # et resume + score ces fichiers, evitant de rescorer ou de re-resumer ceux deja résumés et scorés
 
 #il manque plein de petites optimisations,comme le fait que des fois,beaucoup d 'infos pas forcement necessaires sont passées en chemin (ex les metadat entieres sont passées alors qu'on a besoin que de line_count),
 #l'optimisation de la modularisation des fonctions.Je decoupe bien en petits morceaux mes taches,mais est ce que je les decoupe bien(au bon endroit) ? etc etc
+
+#Je peux acceder aux infos de deux manieres dans deux cas : 
+#J'ai le chemin sensible a la casse -> je peux recuperer l'objet Path correspondant ou l'adresse + les metadata via database["files"][chemin.lower()]
+#Et si j'ai le chemin non sensible,je peux recuperer les metadata via database["files"]["chemin"],et  meme creer un objet Path,en recuperant le chemin original via database["files"]["chemin"]["path"]
+
+#Systeme de score plus poussé : réagit au langage du projet.(+ de points pour les fichiers en langage du projet,aucun bonus pour les sites statiques si on a un serveur python par exemple,et depreciation des fichiers d'un autre langage)
+#Trouver la stack du projet permet aussi de donner des bonus aux fichiers specifiques au projet( requirements en python,recuperer les headers en c,node-packages,)
+#meme pas besoin de se casser la tete on va utiliser un appel LLM pour determiner precisement les presets/langage de la codebase - ou pas
