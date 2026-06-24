@@ -4,14 +4,76 @@ import pathspec
 import os 
 import json
 
+SCORE_SEUIL_HAUT = 70
+SCORE_SEUIL_BAS = 40
 
+path_bonuses = {
+    "src/" : 40,
+    "app/" : 40,
+    "lib/" : 35,
+    "server/": 35,
+    "docs/" : 25,
+    "routes/" : 25,
+    "config/" : 20,
+    "scripts/" : 10,
+    ".github/" : 20,
+}
+name_bonuses = {
+    "main" : 30,
+    "app" : 30,
+    "server" : 30,
+    "controller" : 25,
+    "route" : 25,
+    "handler" : 25,
+    "service" : 25,
+    "manager" : 25,
+    "usecase" : 25,
+    "repository" : 20,
+    "root" : 20,
+    "model" : 20,
+    "schema" : 20,
+    "entity" : 20,
+    "config" : 15,
+    "settings": 15, 
+    "requirements" : 70,
+    "Dockerfile" : 70
+}
+
+extension_bonuses = {
+    ".py" : 10,
+    ".ts" : 10,
+    ".tsx" : 10,
+    ".js" : 10,
+    ".jsx" : 10,
+    ".go" : 10,
+    ".c" : 10,
+    ".h" : 10,
+    ".java" : 10,
+    ".rs" : 10,
+    ".toml" : 5,
+    ".yml" : 5,
+    ".yaml" : 5,
+    ".json" : 5,
+    "xml" : 5,
+    ".md" : 10,
+}
+
+name_penalties = {
+    "test",
+    "asset",
+    "generated",
+    "lockfile",
+    "node_modules",
+    "dist",
+    "build_output"
+}
 """
 Chemin,taille,nombre de lignes,extension + exclusion gitignore + exclusion assets+tests : pdf + dossiers assets/ et dossier tests/ 
 """
 def make_inventory(repo_root : str):
     path_root = Path(repo_root)
     os.chdir(path_root)
-    print(os.getcwd())
+    print(os.getcwd()) # debug
     return list_files(Path("."))
 
 
@@ -232,5 +294,50 @@ def handle_usefulness_response(database : dict,readme_status : str) -> str | Non
         return f"Le readme a été considéré comme {readme_status},donc considere bien que {msg_utile if readme_status == 'utile' else msg_insuffisant}.Son resume se trouve dans l'entree resume de son objet dans l'arborescence"
     
     
+def score_resume_associate(database : dict,filepath : str | Path,mode : str): 
+    #si mode = full,on fait tout,si mode = associate,on ne refait pas scoring + resume,juste on associe,et si mode = classic,on score et on resume,sans associer.Ex pour les documents d'infos du planner,en mode classique,apres 
+    #le planner,en mode full sur tous les fichiers,et les fichiers resumés pour le planner,mais qui n'ont pas pu etre associés par ce que le plan n'existait pas,on relancera en mode associer. 
+    return 1
+
+
+def score(metadata : dict,filepath : Path):
+    #location part
+    scorer = 0
+    folders = filepath.parts[:-1]
+    best = 0
+    for folder in folders :
+        val = path_bonuses.get(folder,0)
+        if val > best :
+            best = val
+    scorer += best 
+    
+    #name part 
+    name = filepath.stem
+    scorer += name_bonuses.get(name,0)
+    
+    #line count part
+    count = metadata["lines_count"]
+    if count < 3 :
+        scorer -= 10
+    elif count < 10 :
+        scorer += 10
+    elif count < 500 :
+        scorer += 20
+    elif count < 1000 :
+        scorer += 10
+    elif count < 5000:
+        scorer -= 10
+    else :
+        scorer += 0
+    
+    #et extension
+    scorer += extension_bonuses.get(metadata["extension"],0)
+    
+    return scorer
+   
+
 #fonction utilitaire d'exploration et de scoring,qui peut prendre une liste de fichiers specifiques en argument,ou aucun(dans ce cas la on explorera tout le repo),
 # et resume + score ces fichiers, evitant de rescorer ou de re-resumer ceux deja résumés et scorés
+
+#il manque plein de petites optimisations,comme le fait que des fois,beaucoup d 'infos pas forcement necessaires sont passées en chemin (ex les metadat entieres sont passées alors qu'on a besoin que de line_count),
+#l'optimisation de la modularisation des fonctions.Je decoupe bien en petits morceaux mes taches,mais est ce que je les decoupe bien(au bon endroit) ? etc etc
