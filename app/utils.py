@@ -329,8 +329,49 @@ def score_resume_associate(database : dict,filepath : Path,mode : str,workflow_r
     return {}
     
 
-def create_plan(database:dict,user_answers) :
-    pass
+def create_plan(database : dict,user_answers : dict ,readme_status : str ,meaningful_files : dict ,workflow_run_id : str) :
+    #trier les answers dans une fonction/moment anterieur,pas dans cette fonction,et aussi typer la variables des answers
+    #preciser dans le prompt qu'il ya quelques fichiers resumés dans l'arbre pour l'aider a comprendre,et utiliser handle usefulness pour injecter le readme.
+    #il doit donner trois choix d'approches
+    for i in range(1,meaningful_files["num_fichiers"]):
+        filepath = Path(meaningful_files[str(i)])
+        database = score_resume_associate(database=database,filepath=filepath,mode="resume",workflow_run_id=workflow_run_id)
+        database["files"][filepath.as_posix().lower()]["score"] = 100 #on met a 100 le score des fichiers qui ont étés choisis
+    
+    answers = user_answers.copy()
+    answers.pop("format")
+    msg = f"""
+    Tu es un agent planificateur dont le but est de proposer trois approches de plan completes dans le but de rediger une documentation.
+    Voila l'aborescence de la codebase,avec des metadata,et les resume de certains fichiers,pour t'aider a comprendre le projet :
+    {handle_usefulness_response(database=database,readme_status=readme_status)}
+    Arborescence : 
+    {json.dumps(database['tree'],indent=2,ensure_ascii=False)}
+    Preferences de l'utilisateur pour la documentation : 
+    {json.dumps(answers,indent=2,ensure_ascii=False)}
+    Regles a absolument respecter :
+    - Tu dois proposer trois approches de plan détaillées
+    - Tu dois suivre les preferences de l'utilisateur
+    - Tu dois proposer des plans sans blabla,sans phrase inutile,dense,mais complet et assez long
+    - Tes plans de documentations sont segmentés en sections (exemple : introduction,section 1 : endpoints,etc etc)
+    - Les plans ne doivent pas contenir de sections inutiles,qui n'auront pas assez de contenu,ou qui ne sont pas pertinents.
+    - Le contenu de chaque section doit etre précisé clairement,en une ou deux phrases.
+    - Tu repondras sous la forme d'un objet json de la forme qui suit :
+    {{
+        "approche 1" : {{
+            "Nom de section" : "contenu de section",
+            "Nom de section" : "contenu de section",
+            etc,etc
+        }},
+        "approche 2" : {{
+            meme forme que l'approche 1
+        }},
+        "approche 3" : {{
+            meme forme que precedemment
+        }} 
+    }}
+    """
+    response = query_json(msg=msg,llm=first_model,workflow_run_id=workflow_run_id,tag="planning")
+    return (database,response)
 
 def score(metadata : dict,filepath : Path):
     #location part

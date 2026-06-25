@@ -16,7 +16,7 @@ from collections.abc import Callable
 from model import query,query_json,first_model
 from utils import terminal_ask
 
-async def ask_all_questions(ask_func: Callable)-> dict[str,str]:
+def ask_all_questions(ask_func: Callable)-> dict[str,str]:
     """Poser et recuperer toutes les questions necessaires"""
     response = dict() 
     questions = [
@@ -35,9 +35,9 @@ async def ask_all_questions(ask_func: Callable)-> dict[str,str]:
     return response
 
 
-async def get_json_resume(ask_all_questions:Callable,workflow_run_id : str) -> dict[str,str]: 
+def get_json_resume(ask_all_questions:Callable,workflow_run_id : str) -> dict[str,str]: 
     """Fonction qui va recuperer toutes les reponses,va faire un call,puis agreger les reponses dans un json."""
-    msg = f"""Voici un json/dictionnaire de questions reponses : f{await ask_all_questions(terminal_ask)}.Transforme le 
+    msg = f"""Voici un json/dictionnaire de questions reponses : f{ask_all_questions(terminal_ask)}.Transforme le 
     en un dictionnaire abrégé de cette forme a partir des reponses de celui-ci :
     {{
         "taille" : reponses possibles : ["tres petite","petite","moyenne","grande"],
@@ -54,6 +54,9 @@ async def get_json_resume(ask_all_questions:Callable,workflow_run_id : str) -> d
     """
     res = query_json(msg=msg,llm=first_model,workflow_run_id=workflow_run_id,tag="resuming json user answers") 
     return res 
+
+
+
 
 """
 Step 1 (brainstorm) : 
