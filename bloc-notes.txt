@@ -79,3 +79,23 @@ Comme on possede le plan,on peut surement en profiter pour assoicer les fichiers
 
 
 Chaque prompt de writer -> injection des demandes de l'utilisateur + infos necessaires a sa section + prompt sur comment ecrire
+
+
+
+question : je veux un systeme d'association fichiers -> section dans laquelle le fichier va servir dans la docu.
+
+J'ai deux choix,soit a la creation du plan,le planner connait l'arborescence des fichiers,et se base sur uniquement les metadata/noms pour me donner les fichiers associés a chaque section du plan,soit,
+lors du résumé,on en profite pour injecter le plan dans le prompt du llm qui resume et on lui demande en même temps de choisir la section appropriée.
+
+1ere option : moins de token,mais fiabilité questionnable,il se base uniquement sur le placement du fichier,son nombre de ligne,son nom et son extension de fichier pour dire dans quelle section il se trouve
+
+2eme option : plus de tokens,puisque le plan est injecté a chaque résumé,mais plus fiable car le llm a lu le document et le plan et peut donc choisir une section correctement.
+
+Deuxième question,je ne sais pas si je dois proposer plusieurs approches de plan entre lesquelles le user choisit,quitte a faire ingerer deux fois arborescence + résumé de certains fichier,
+ou alors je laisse le llm faire un seul plan definitif directement.Les plans proposés sont deja en fonction des precisions users en soi.et les propositions ne sont pas mauvaises.Et en meme temps la consommation
+tokens est basse pour l'instant.
+
+
+aussi des problemes pour organiser mon code
+
+Bonne tracabilité langfuse

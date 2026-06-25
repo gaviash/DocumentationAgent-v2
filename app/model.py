@@ -15,7 +15,7 @@ langfuse = get_client()
 
 first_model = Ollama(
     model=str(os.getenv("OLLAMA_MODEL")),
-    base_url="https://ollama.com",
+    base_url=str(os.getenv("OLLAMA_BASE_URL")),
     temperature=0.1,
     context_window=64000,
     json_mode=True,

@@ -11,3 +11,5 @@
 **Ne pas oublier,le resume de chaque fichier passe par un scoring avant qui devrait reduire le nombre de fichiers résumés**
 
 Les valeurs augmentent selon le nombre de fichier dans l'arborescence
+
+Actuellement dans les faits,pour les etapes actuelles, on en est a 30k token max(ce qui est ridicule,sachant que plus de 2/3 sont de l'input.)

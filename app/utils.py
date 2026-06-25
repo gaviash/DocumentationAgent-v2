@@ -260,11 +260,10 @@ def readme_usefulness(database : dict,workflow_id : str) -> str :
             
         return res["status"]
         
-def get_meaningful_list(database : dict,readme_status : str,workflow_id : str) -> dict:
-    #func pour gerer le comportement avec le readme
-    msg = f"""Ton but est de fournir une liste des 2-7 fichiers les plus coherents parmi l'arborescence ci-dessous.Choisis les fichiers qui vont donner les infos necessaires pour permettre de construire un plan de 
+def get_meaningful_list(database : dict,workflow_id : str) -> dict:
+    msg = f"""Ton but est de fournir une liste des 2-8 fichiers les plus coherents parmi l'arborescence ci-dessous.Choisis les fichiers qui vont donner les infos necessaires pour permettre de construire un plan de 
         redaction de documentation de la codebase.Tu reflechis aux fichiers qui permettent de saisir le plus du projet.Des entrypoints api,des fichiers main,etc etc,tu es capable de bien reflechir.
-        {handle_usefulness_response(database=database,readme_status=readme_status)}
+        Tu ne dois pas inclure le readme dans tes fichiers coherents-utiles,il est deja pris en compte.
         
         Voila l'arborescence des fichiers de la codebase :
         
@@ -272,12 +271,11 @@ def get_meaningful_list(database : dict,readme_status : str,workflow_id : str) -
         
         La sortie que tu dois produire est uniquement un json de cette forme :
         {{
-            "num_fichiers":[2-7],
+            "num_fichiers":[2-8],
             1 : <chemin>,
             2 : <chemin>,
             etc,pour le nombre de fichier que tu as choisi.
         }}
-        
         
         """
     return query_json(msg=msg,llm=first_model,workflow_run_id=workflow_id,tag="choosing_files")
@@ -302,6 +300,7 @@ def score_resume_associate(database : dict,filepath : Path,mode : str,workflow_r
     #si mode = full,on fait tout,si mode = associate,on ne refait pas scoring + resume,juste on associe,et si mode = classic,on score et on resume,sans associer.Ex pour les documents d'infos du planner,en mode classique,apres 
     #le planner,en mode full sur tous les fichiers,et les fichiers resumés pour le planner,mais qui n'ont pas pu etre associés par ce que le plan n'existait pas,on relancera en mode associer.mode resumé on resume uniquement 
     if mode == "resume" :
+        print(f"\nEn train de resumer {filepath.as_posix().lower()} \n")
         msg = f"""
         Tu es un assitant documentaire,et ta tache est de resumer des fichiers de code pour raccourcir le contenu et fournir les informations necessaires.
         Voici le document :
@@ -314,7 +313,7 @@ def score_resume_associate(database : dict,filepath : Path,mode : str,workflow_r
         -Le résumé doit dire en premier ce qu'est le fichier/document,puis developper.
         -Le résumé doit etre complet : le but est de raccourcir la comprehension d'un fichier de code,tout en restant exhaustif et fidele
         -Le résumé est compact et dense au niveau de la formulation.On evite un maximum de phrases et formulations inutiles.On garde seulement l'utile et le concret.
-        -Il faut inclure un maximum d'infos concernant le code,etre exhaustif,et ne pas avoir peur d'ecrire un plus long texte,sans retomber dans la paraphrase ou du texte pour ne rien dire.
+        -Il faut inclure un maximum d'infos concernant le code,etre exhaustif,et ne pas avoir peur d'ecrire un plus long texte,sans retomber dans la paraphrase ou du texte pour ne rien dire.Tu peux inclure des snippets de code si ca aide a la comprehension
         il faut que ce soit bien documenté,et bien détaillé,mais juste ce qu'il faut.
         
         Tu repondras sous la forme d'un bloc json comme ci dessous,et uniquement avec ce bloc :
@@ -324,16 +323,16 @@ def score_resume_associate(database : dict,filepath : Path,mode : str,workflow_r
         Voila le debut du json,remplis :
         """
         res = query_json(msg=msg,llm=first_model,workflow_run_id=workflow_run_id,tag="resume")
+        print(f"\nResume : {json.dumps(res,indent=2,ensure_ascii=False)}\n")
         database["files"][filepath.as_posix().lower()]["resume"] = res["resume"]
         return database
     return {}
     
 
 def create_plan(database : dict,user_answers : dict ,readme_status : str ,meaningful_files : dict ,workflow_run_id : str) :
-    #trier les answers dans une fonction/moment anterieur,pas dans cette fonction,et aussi typer la variables des answers
     #preciser dans le prompt qu'il ya quelques fichiers resumés dans l'arbre pour l'aider a comprendre,et utiliser handle usefulness pour injecter le readme.
-    #il doit donner trois choix d'approches
-    for i in range(1,meaningful_files["num_fichiers"]):
+    #il doit donner trois choix d'approches(a voir)
+    for i in range(1,meaningful_files["num_fichiers"]+1):
         filepath = Path(meaningful_files[str(i)])
         database = score_resume_associate(database=database,filepath=filepath,mode="resume",workflow_run_id=workflow_run_id)
         database["files"][filepath.as_posix().lower()]["score"] = 100 #on met a 100 le score des fichiers qui ont étés choisis
@@ -341,7 +340,7 @@ def create_plan(database : dict,user_answers : dict ,readme_status : str ,meanin
     answers = user_answers.copy()
     answers.pop("format")
     msg = f"""
-    Tu es un agent planificateur dont le but est de proposer trois approches de plan completes dans le but de rediger une documentation.
+    Tu es un agent planificateur dont le but est de proposer un plan complet dans l'optique de rediger une documentation.
     Voila l'aborescence de la codebase,avec des metadata,et les resume de certains fichiers,pour t'aider a comprendre le projet :
     {handle_usefulness_response(database=database,readme_status=readme_status)}
     Arborescence : 
@@ -349,26 +348,28 @@ def create_plan(database : dict,user_answers : dict ,readme_status : str ,meanin
     Preferences de l'utilisateur pour la documentation : 
     {json.dumps(answers,indent=2,ensure_ascii=False)}
     Regles a absolument respecter :
-    - Tu dois proposer trois approches de plan détaillées
+    - Une petite documentation tourne autour de 3-4 sections,une moyenne autour de 5,6,7 et une grande 5,6,7 ou plus.
+    - Tu dois proposer une approche de plan détaillée
     - Tu dois suivre les preferences de l'utilisateur
-    - Tu dois proposer des plans sans blabla,sans phrase inutile,dense,mais complet et assez long
-    - Tes plans de documentations sont segmentés en sections (exemple : introduction,section 1 : endpoints,etc etc)
-    - Les plans ne doivent pas contenir de sections inutiles,qui n'auront pas assez de contenu,ou qui ne sont pas pertinents.
-    - Le contenu de chaque section doit etre précisé clairement,en une ou deux phrases.
-    - Tu repondras sous la forme d'un objet json de la forme qui suit :
+    - Tu dois proposer un plan sans blabla,sans phrase inutile,dense,mais complet et assez long
+    - Ton plan de documentation est segmenté en sections (exemple : introduction,section 1 : endpoints,etc etc)
+    - Le plan ne doit pas contenir de sections inutiles,qui n'auront pas assez de contenu,ou qui ne sont pas pertinents.
+    - Le contenu de chaque section doit etre précisé clairement,plusieurs phrases.Qu'est ce que doit expliquer la section ? De quoi parlera t-elle,precisement ? etc etc
+    - Tu dois reellement prevoir un plan tres complet,détaillé,qui,une fois donné a quelqu'un d'autre pourra lui permettre d'ecrire la documentation
+    - Les sections doivent etre détaillées et denses.Sois bavard sur les descriptions de section,n'hesite pas a preciser ce qui doit etre dedans,etc
+    - Les sections doivent eviter de se marcher dessus sur les sujets.Chaque section doit aborder un domaine,qui n'est pas du tout abordable dans une autre.
+    Ex : ne pas mettre une section Deploiement docker,une section configuration variables env,ET une section installation et deploiement local.C'est beaucoup trop repetitif.Compacte tout en une seule "Configuration,variables env et deploiement"
+    Suis ce principe sur tous les sujets.
+    Chaque ecrivain n'aura acces qu'aux informations de sa propre section,donc ne melange pas les sujets.
+    - Tu repondras sous la stricte forme d'un objet json de la forme qui suit :
     {{
-        "approche 1" : {{
-            "Nom de section" : "contenu de section",
-            "Nom de section" : "contenu de section",
-            etc,etc
-        }},
-        "approche 2" : {{
-            meme forme que l'approche 1
-        }},
-        "approche 3" : {{
-            meme forme que precedemment
-        }} 
+        "nombre sections" : x,
+        "nom section 1": "plan de la section 1 détaillé",
+        "nom section 2" : "plan de la section 2 détaillé",
+        etc etc
     }}
+    Complete le json :
+    
     """
     response = query_json(msg=msg,llm=first_model,workflow_run_id=workflow_run_id,tag="planning")
     return (database,response)
