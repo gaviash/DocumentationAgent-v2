@@ -295,46 +295,69 @@ def discover_and_adapt_environment(): #apres readme,avant score et avant get_mea
     #seront détaillés et crees par codex,pour ne rien oublier)
     #potentiellement les fichiers essentiels a ce projet.A decider si la decouverte de la stack doit se faire par code ou par llm call.
     pass
+
+def classify_all_docs(database:dict,sections :dict,meaningful_list :dict,workflow_id : str): #apres le plan
+    for file in database["files"]:
+        strpath = database["files"][file]["path"]
+        if strpath in meaningful_list or file == "readme.md":
+            database = score_resume_associate(database=database,sections=sections,filepath=Path(strpath),mode="associate",workflow_run_id=workflow_id)
+        else :
+            database = score_resume_associate(database=database,sections=sections,filepath=Path(strpath),mode="full",workflow_run_id=workflow_id)
+    return database
     
-def score_resume_associate(database : dict,filepath : Path,mode : str,workflow_run_id : str)-> dict: 
-    #si mode = full,on fait tout,si mode = associate,on ne refait pas scoring + resume,juste on associe,et si mode = classic,on score et on resume,sans associer.Ex pour les documents d'infos du planner,en mode classique,apres 
+        
+    
+def score_resume_associate(database : dict,sections : dict,filepath : Path,mode : str,workflow_run_id : str)-> dict: 
+    #si mode = full,on fait tout,si mode = associate,on ne refait pas scoring + resume,juste on associe,et si mode = classic(finalement pas implementé),on score et on resume,sans associer.Ex pour les documents d'infos du planner,en mode classique,apres 
     #le planner,en mode full sur tous les fichiers,et les fichiers resumés pour le planner,mais qui n'ont pas pu etre associés par ce que le plan n'existait pas,on relancera en mode associer.mode resumé on resume uniquement 
     if mode == "resume" :
-        print(f"\nEn train de resumer {filepath.as_posix().lower()} \n")
-        msg = f"""
-        Tu es un assitant documentaire,et ta tache est de resumer des fichiers de code pour raccourcir le contenu et fournir les informations necessaires.
-        Voici le document :
-        \"\"\"
-        {filepath.read_text(encoding="utf-8")}
-        \"\"\"
+        if database['files'][filepath.as_posix().lower()]["resume"] != "" :
+            return database
         
-        Voici quelques regles a respecter :
-        -Le résumé ne doit pas contenir d'invention,ni de suppositions hallucinées.
-        -Le résumé doit dire en premier ce qu'est le fichier/document,puis developper.
-        -Le résumé doit etre complet : le but est de raccourcir la comprehension d'un fichier de code,tout en restant exhaustif et fidele
-        -Le résumé est compact et dense au niveau de la formulation.On evite un maximum de phrases et formulations inutiles.On garde seulement l'utile et le concret.
-        -Il faut inclure un maximum d'infos concernant le code,etre exhaustif,et ne pas avoir peur d'ecrire un plus long texte,sans retomber dans la paraphrase ou du texte pour ne rien dire.Tu peux inclure des snippets de code si ca aide a la comprehension
-        il faut que ce soit bien documenté,et bien détaillé,mais juste ce qu'il faut.
-        
-        Tu repondras sous la forme d'un bloc json comme ci dessous,et uniquement avec ce bloc :
-        {{
-            "resume" : <resume> 
-        }}
-        Voila le debut du json,remplis :
-        """
-        res = query_json(msg=msg,llm=first_model,workflow_run_id=workflow_run_id,tag="resume")
+        res = resume(filepath=filepath,workflow_run_id=workflow_run_id)
         print(f"\nResume : {json.dumps(res,indent=2,ensure_ascii=False)}\n")
         database["files"][filepath.as_posix().lower()]["resume"] = res["resume"]
         return database
+    elif mode == "associate" :
+        #associer
+        pass
+    elif mode == "full":
+        #score & resume & associate.On associe uniquement les fichiers qui ont un score superieur au seuil.On associe en append la liste de la section concernée : database["sections"][num_section].append(chemin)
+        pass
+        
     return {}
-    
+
+def resume(filepath : Path,workflow_run_id : str):
+    print(f"\nEn train de resumer {filepath.as_posix().lower()} \n")
+    msg = f"""
+    Tu es un assistant documentaire,et ta tache est de resumer des fichiers de code pour raccourcir le contenu et fournir les informations necessaires.
+    Voici le document :
+    \"\"\"
+    {filepath.read_text(encoding="utf-8")}
+    \"\"\"
+        
+    Voici quelques regles a respecter :
+    -Le résumé ne doit pas contenir d'invention,ni de suppositions hallucinées.
+    -Le résumé doit dire en premier ce qu'est le fichier/document,puis developper.
+    -Le résumé doit etre complet : le but est de raccourcir la comprehension d'un fichier de code,tout en restant exhaustif et fidele
+    -Le résumé est compact et dense au niveau de la formulation.On evite un maximum de phrases et formulations inutiles.On garde seulement l'utile et le concret.
+    -Il faut inclure un maximum d'infos concernant le code,etre exhaustif,et ne pas avoir peur d'ecrire un plus long texte,sans retomber dans la paraphrase ou du texte pour ne rien dire.Tu peux inclure des snippets de code si ca aide a la comprehension
+    il faut que ce soit bien documenté,et bien détaillé,mais juste ce qu'il faut.
+        
+    Tu repondras sous la forme d'un bloc json comme ci dessous,et uniquement avec ce bloc :
+    {{
+        "resume" : <resume> 
+    }}
+    Voila le debut du json,remplis :
+    """
+    return query_json(msg=msg,llm=first_model,workflow_run_id=workflow_run_id,tag="resume")
 
 def create_plan(database : dict,user_answers : dict ,readme_status : str ,meaningful_files : dict ,workflow_run_id : str) :
     #preciser dans le prompt qu'il ya quelques fichiers resumés dans l'arbre pour l'aider a comprendre,et utiliser handle usefulness pour injecter le readme.
     #il doit donner trois choix d'approches(a voir)
     for i in range(1,meaningful_files["num_fichiers"]+1):
         filepath = Path(meaningful_files[str(i)])
-        database = score_resume_associate(database=database,filepath=filepath,mode="resume",workflow_run_id=workflow_run_id)
+        database = score_resume_associate(database=database,sections = {},filepath=filepath,mode="resume",workflow_run_id=workflow_run_id)
         database["files"][filepath.as_posix().lower()]["score"] = 100 #on met a 100 le score des fichiers qui ont étés choisis
     
     answers = user_answers.copy()
@@ -364,15 +387,16 @@ def create_plan(database : dict,user_answers : dict ,readme_status : str ,meanin
     - Tu repondras sous la stricte forme d'un objet json de la forme qui suit :
     {{
         "nombre sections" : x,
-        "nom section 1": "plan de la section 1 détaillé",
-        "nom section 2" : "plan de la section 2 détaillé",
+        "1": "nom section 1 : plan de la section 1 détaillé",
+        "2" : "nom section 2 : plan de la section 2 détaillé",
         etc etc
     }}
     Complete le json :
     
     """
-    response = query_json(msg=msg,llm=first_model,workflow_run_id=workflow_run_id,tag="planning")
-    return (database,response)
+    sections = query_json(msg=msg,llm=first_model,workflow_run_id=workflow_run_id,tag="planning")
+    database['sections'] = {i:[] for i in range(1,sections["nombre sections"]+1)}
+    return (database,sections)
 
 def score(metadata : dict,filepath : Path):
     #location part
