@@ -291,10 +291,12 @@ def handle_usefulness_response(database : dict,readme_status : str) -> str | Non
     elif (readme_status == "utile" or readme_status == "insuffisant") and database["files"]["readme.md"]["resume"] != "":
         return f"Le readme a été considéré comme {readme_status},donc considere bien que {msg_utile if readme_status == 'utile' else msg_insuffisant}.Son resume se trouve dans l'entree resume de son objet dans l'arborescence"
 
-def discover_and_adapt_environment(): #apres readme,avant score et avant get_meaningful_list -> remplit des metadata dans la database a propos de la codebase -> stack du projet et choix des listes de bonus malus pour le score,(ces listes détaillées
-    #seront détaillés et crees par codex,pour ne rien oublier)
-    #potentiellement les fichiers essentiels a ce projet.A decider si la decouverte de la stack doit se faire par code ou par llm call.
+def discover_and_adapt_environment(): #remplit des metadata dans la database a propos de la codebase -> stack du projet et choix des listes de bonus
+    #malus pour le score,(ces listes détaillées seront détaillés et crees par codex,pour ne rien oublier)
+    #A decider si la decouverte de la stack doit se faire par code ou par llm call.Si c'est par llm call,utiliser un modele puissant,pour qu'il puisse donner
+    #un max de regles coherentes.
     pass
+
 
 def classify_all_docs(database:dict,sections :dict,meaningful_list :dict,workflow_id : str): #apres le plan
     for file in database["files"]:
@@ -303,6 +305,8 @@ def classify_all_docs(database:dict,sections :dict,meaningful_list :dict,workflo
             database = score_resume_associate(database=database,sections=sections,filepath=Path(strpath),mode="associate",workflow_run_id=workflow_id)
         else :
             database = score_resume_associate(database=database,sections=sections,filepath=Path(strpath),mode="full",workflow_run_id=workflow_id)
+    #avant le score,on recupere l'environnement(fonction discovery)
+    #a la fin (une sorte de finally),on associe aussi l'arborescence.
     return database
     
         
@@ -319,8 +323,11 @@ def score_resume_associate(database : dict,sections : dict,filepath : Path,mode 
         database["files"][filepath.as_posix().lower()]["resume"] = res["resume"]
         return database
     elif mode == "associate" :
-        #associer
-        pass
+        sidekicks = associate(database=database,sections=sections,filepath=filepath,workflow_run_id=workflow_run_id)
+        database["files"][filepath.as_posix().lower()]["sections"] = sidekicks
+        for i in sidekicks :
+            database["sections"][i].append(filepath.as_posix().lower())
+        return database
     elif mode == "full":
         #score & resume & associate.On associe uniquement les fichiers qui ont un score superieur au seuil.On associe en append la liste de la section concernée : database["sections"][num_section].append(chemin)
         pass
@@ -352,6 +359,41 @@ def resume(filepath : Path,workflow_run_id : str):
     """
     return query_json(msg=msg,llm=first_model,workflow_run_id=workflow_run_id,tag="resume")
 
+def associate(database : dict,sections : dict,filepath : Path,workflow_run_id : str)-> list[int]:
+    print(f"\n En train d'associer {filepath.as_posix()}")
+    metadata = database['files'][filepath.as_posix().lower()]
+    msg =f"""
+    Tu es un assistant documentaire,et ta tache est d'associer un document a un ou plusieurs sections d'une documentation,en fonction de son résumé et de ses metadata.
+    
+    Voici le document :
+    \"\"\"
+    Resumé : {metadata['resume']}
+    Nombre de lignes : {metadata["lines_count"]}
+    Chemin et nom : {metadata['path']}
+    \"\"\"
+    
+    Voici les sections du plan :
+    \"\"\"
+    {json.dumps(sections,indent=2,ensure_ascii=False)}
+    \"\"\"
+    
+    Voici quelques regles a respecter :
+    -Tu dois associer le document a la ou les sections qu'il va documenter le mieux
+    -N'associe un document a plusieurs sections que si le documents va reellement servir aux deux sections.Si il y a des informations dans un document
+    qui sont partagées dans deux sections par exemple
+    -Tu repondras sous la forme d'un bloc json comme ci desosus,et uniquement avec ce bloc,sans modifications,sans changement,
+    et surtout,sans guillemets autour de la liste : 
+    {{
+        "section" : [<numero_de_section>,<numero_de_section>,etc]
+    }}
+    Voila le debut du json,remplis : 
+    
+    """
+    section = query_json(msg=msg,llm=first_model,workflow_run_id=workflow_run_id,tag="associating")
+    print(f"Association a {section['section']}")
+    return section["section"]
+    
+    
 def create_plan(database : dict,user_answers : dict ,readme_status : str ,meaningful_files : dict ,workflow_run_id : str) :
     #preciser dans le prompt qu'il ya quelques fichiers resumés dans l'arbre pour l'aider a comprendre,et utiliser handle usefulness pour injecter le readme.
     #il doit donner trois choix d'approches(a voir)
@@ -433,8 +475,10 @@ def score(metadata : dict,filepath : Path):
     scorer += extension_bonuses.get(metadata["extension"],0)
     
     return scorer
-   
-def score_calibration(database : dict):
+
+
+
+def score_calibration(database : dict): # fonction de test qui calcule le score de tous les fichiers
     for file in database["files"] :
         sc = score(database["files"][file],Path(database["files"][file]["path"]))
         #print(sc)

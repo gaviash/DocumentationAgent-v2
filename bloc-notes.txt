@@ -81,6 +81,13 @@ Comme on possede le plan,on peut surement en profiter pour assoicer les fichiers
 Chaque prompt de writer -> injection des demandes de l'utilisateur + infos necessaires a sa section + prompt sur comment ecrire
 
 
+Il faut aussi associer l'arborescence a des sections,et on l'injectera au writer qui ecrira la section.Quand on recoltera les fichiers a injecter dans la database,
+on testera si dans la liste,il y a "arborescence",qui activera un flag True(normalement toujours faux),qui injectera l'arborescence
+
+
+c'est vrai que certaines données se repetent et auraient étées plus appropriées dans une bdd relationnelle,mais c'est bien plus simple de gerer un dictionnaire,surtout pour un outil comme ca
+
+
 
 question : je veux un systeme d'association fichiers -> section dans laquelle le fichier va servir dans la docu.
 
@@ -97,5 +104,7 @@ tokens est basse pour l'instant.
 
 
 aussi des problemes pour organiser mon code
+
+plus tard on pourra ajouter des exclusions basées sur les reponses utilisateurs,etc,mais uniquement a la fin
 
 Bonne tracabilité langfuse

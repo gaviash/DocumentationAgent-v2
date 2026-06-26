@@ -3,13 +3,22 @@ from steps import get_json_resume,ask_all_questions
 from utils import make_inventory,readme_usefulness,get_meaningful_list,score_calibration,score_resume_associate,create_plan
 from uuid import uuid4
 from pathlib import Path
+from copy import deepcopy
 import asyncio
 import json
 
 
+def classify_all_docs(database:dict,sections :dict,meaningful_list :dict,workflow_id : str): #apres le plan
+    for file in database["files"]:
+        strpath = database["files"][file]["path"]
+        if strpath in meaningful_list.values() or file == "readme.md":
+            
+            database = score_resume_associate(database=database,sections=sections,filepath=Path(strpath),mode="associate",workflow_run_id=workflow_id)
+
 async def main():
     workflow_id = str(uuid4())
     database = make_inventory(r"C:\Users\Gavriel.Myara\Desktop\DocumentationAgentv2\app\process\little_agent")
+    pure_database = deepcopy(database)
     print("\nInventory fait\n")
     questions = get_json_resume(ask_all_questions=ask_all_questions,workflow_run_id=workflow_id)
     readme_status = readme_usefulness(database=database,workflow_id=workflow_id)
@@ -33,6 +42,9 @@ async def main():
     )
     print(f"Plan créé : \n {json.dumps(plan,indent=2,ensure_ascii=False)}")
     
+    classify_all_docs(database=database,sections=plan,meaningful_list=meaningful_list,workflow_id=workflow_id)
+    
     print(f"Database : {json.dumps(database['files'],indent=2,ensure_ascii=False)}")
+    
     
 asyncio.run(main())
