@@ -67,9 +67,8 @@ name_penalties = {
     "dist",
     "build_output"
 }
-"""
-Chemin,taille,nombre de lignes,extension + exclusion gitignore + exclusion assets+tests : pdf + dossiers assets/ et dossier tests/ 
-"""
+
+
 def make_inventory(repo_root : str):
     path_root = Path(repo_root)
     os.chdir(path_root)
@@ -224,7 +223,7 @@ def readme_usefulness(database : dict,workflow_id : str) -> str :
         - Il decrit au moins partiellement le fonctionnement, l'installation, l'usage ou la structure.
         - Il contient assez d'informations pour aider a produire une documentation pertinente.
         - Il contient une quantité d'information et de profondeur minimale.
-        N'hesite pas a etre strict.Ne considere pas un readme utile par ce que tu as peur de faire rater des informations.Utile veut dire complet et exemplaire pour un readme de codebase operationnel
+        N'hesite pas a etre strict.Ne considere pas un readme utile par ce que tu as peur de faire rater des informations.Utile veut dire complet et exemplaire pour un readme de codebase operationnel.
         
         Tu retourneras uniquement un JSON valide sous cette forme :
         
@@ -295,10 +294,11 @@ def discover_and_adapt_environment(): #remplit des metadata dans la database a p
     #malus pour le score,(ces listes détaillées seront détaillés et crees par codex,pour ne rien oublier)
     #A decider si la decouverte de la stack doit se faire par code ou par llm call.Si c'est par llm call,utiliser un modele puissant,pour qu'il puisse donner
     #un max de regles coherentes.
+    #par llm,qui va modifier (effet de bord) les dictionnaires de bonus et de malus
     pass
 
 
-def classify_all_docs(database:dict,sections :dict,meaningful_list :dict,workflow_id : str): #apres le plan
+def classify_all_docs(database:dict,sections :dict,meaningful_list :dict, workflow_id : str)-> dict : #apres le plan
     for file in database["files"]:
         strpath = database["files"][file]["path"]
         if strpath in meaningful_list or file == "readme.md":
@@ -314,6 +314,8 @@ def classify_all_docs(database:dict,sections :dict,meaningful_list :dict,workflo
 def score_resume_associate(database : dict,sections : dict,filepath : Path,mode : str,workflow_run_id : str)-> dict: 
     #si mode = full,on fait tout,si mode = associate,on ne refait pas scoring + resume,juste on associe,et si mode = classic(finalement pas implementé),on score et on resume,sans associer.Ex pour les documents d'infos du planner,en mode classique,apres 
     #le planner,en mode full sur tous les fichiers,et les fichiers resumés pour le planner,mais qui n'ont pas pu etre associés par ce que le plan n'existait pas,on relancera en mode associer.mode resumé on resume uniquement 
+    #le tri des fichiers deja résumés/scorés ne sont pas a charge de cette fonction,le tri doit se faire en amont
+    #on considere que tous les fichiers passés sont passés dans le bon mode (ex : on ne va pas passer un fichier pas résumé en mode associate)
     if mode == "resume" :
         if database['files'][filepath.as_posix().lower()]["resume"] != "" :
             return database
@@ -329,12 +331,73 @@ def score_resume_associate(database : dict,sections : dict,filepath : Path,mode 
             database["sections"][i].append(filepath.as_posix().lower())
         return database
     elif mode == "full":
+        metadata = database["files"][filepath.as_posix().lower()]
+        score_count = score(metadata=metadata,filepath=filepath)
+        metadata["score"] = score_count 
+        if score_count >= SCORE_SEUIL_HAUT :
+            database = resume_and_associate(database=database,sections=sections,filepath=filepath,workflow_run_id=workflow_run_id)
+        elif score_count <= SCORE_SEUIL_BAS :
+            metadata["resume"] = None
+        else : 
+            decision = decide(metadata=metadata,sections=sections,workflow_run_id=workflow_run_id)
+            if decision["decision"] == "utile" :
+                metadata["resume"] = decision["resume"]
+                for i in decision["sections"]:
+                    database["sections"][i].append(filepath.as_posix().lower())
+                metadata["sections"] = decision["sections"]
+        return database
         #score & resume & associate.On associe uniquement les fichiers qui ont un score superieur au seuil.On associe en append la liste de la section concernée : database["sections"][num_section].append(chemin)
-        pass
         
     return {}
 
-def resume(filepath : Path,workflow_run_id : str):
+def resume_and_associate(database : dict,sections : dict,filepath : Path,workflow_run_id : str): #fonction de factorisation
+    metadata = database["files"][filepath.as_posix().lower()]
+    res = resume(filepath=filepath,workflow_run_id=workflow_run_id)
+    metadata["resume"] = res["resume"]
+    sidekicks = associate(database=database,sections=sections,filepath=filepath,workflow_run_id=workflow_run_id)
+    for i in sidekicks :
+        database["sections"][i].append(filepath.as_posix().lower())
+    metadata["sections"] = sidekicks
+    return database
+
+def decide(metadata:dict,sections : dict,workflow_run_id : str):
+    msg = f"""
+    Tu es un assistant documentaire.Etant donné le contenu d'un document qui va t'etre donné,tu as pour mission de decider si il est relevant pour une documentation,basé
+    sur le contenu et le plan de la documentation.Si il est relevant,tu devras le résumer et l'associer a une des sections du plan.
+    Voila son chemin : {metadata['path']}
+    Voila le contenu du document :
+    {Path(metadata['path']).read_text(encoding="utf-8")}.
+    Voila le plan :
+    {json.dumps(sections,indent=2,ensure_ascii=False)}.
+    Quelques regles a respecter absolument : 
+    -Le document est relevant uniquement si il va servir a la documentation d'une ou plusieurs sections.
+    -Il est relevant uniquement si tu vois son utilité claire dans la documentation.
+    -Si le document est relevant, tu le resumeras et tu l'associeras a une/plusieurs sections.
+    -Le résumé ne doit pas contenir d'invention,ni de suppositions hallucinées.
+    -Le résumé doit dire en premier ce qu'est le fichier/document,puis developper.
+    -Le résumé doit etre complet : le but est de raccourcir la comprehension d'un fichier de code,tout en restant exhaustif et fidele
+    -Le résumé est compact et dense au niveau de la formulation.On evite un maximum de phrases et formulations inutiles.On garde seulement l'utile et le concret.
+    -Il faut inclure un maximum d'infos concernant le code,etre exhaustif,et ne pas avoir peur d'ecrire un plus long texte,sans retomber dans la paraphrase ou du texte pour ne rien dire.Tu peux inclure des snippets de code si ca aide a la comprehension
+    il faut que ce soit bien documenté,et bien détaillé,mais juste ce qu'il faut.
+    -Si tu associes,tu dois associer le document a la ou les sections qu'il va documenter le mieux
+    -N'associe un document a plusieurs sections que si le documents va reellement servir aux deux sections.Si il y a des informations dans un document
+    qui sont partagées dans deux sections par exemple
+    -Tu repondras sous la forme d'un bloc json comme ci desosus,et uniquement avec ce bloc,sans modifications,sans changement,
+    et surtout,sans guillemets autour de la liste :
+    {{
+        "decision" : "utile" ou "inutile",
+        "resume" : <resume>,
+        "sections" : [<numero_section>,<numero_section>,etc]
+    }}
+    
+    Si tu decides que le document est inutile,laisse vide les champs resume et sections.
+    Voila le debut du json,complete :
+    """
+    
+    return query_json(msg=msg,llm=first_model,workflow_run_id=workflow_run_id,tag="deciding")
+    
+
+def resume(filepath : Path,workflow_run_id : str)-> dict:
     print(f"\nEn train de resumer {filepath.as_posix().lower()} \n")
     msg = f"""
     Tu es un assistant documentaire,et ta tache est de resumer des fichiers de code pour raccourcir le contenu et fournir les informations necessaires.
@@ -394,16 +457,17 @@ def associate(database : dict,sections : dict,filepath : Path,workflow_run_id : 
     return section["section"]
     
     
-def create_plan(database : dict,user_answers : dict ,readme_status : str ,meaningful_files : dict ,workflow_run_id : str) :
+def create_plan(database : dict,user_answers : dict ,readme_status : str ,meaningful_files : dict ,workflow_run_id : str) -> tuple[dict,dict] :
     #preciser dans le prompt qu'il ya quelques fichiers resumés dans l'arbre pour l'aider a comprendre,et utiliser handle usefulness pour injecter le readme.
     #il doit donner trois choix d'approches(a voir)
+    answers = user_answers.copy()
+    answers.pop("format")
     for i in range(1,meaningful_files["num_fichiers"]+1):
         filepath = Path(meaningful_files[str(i)])
         database = score_resume_associate(database=database,sections = {},filepath=filepath,mode="resume",workflow_run_id=workflow_run_id)
         database["files"][filepath.as_posix().lower()]["score"] = 100 #on met a 100 le score des fichiers qui ont étés choisis
     
-    answers = user_answers.copy()
-    answers.pop("format")
+    
     msg = f"""
     Tu es un agent planificateur dont le but est de proposer un plan complet dans l'optique de rediger une documentation.
     Voila l'aborescence de la codebase,avec des metadata,et les resume de certains fichiers,pour t'aider a comprendre le projet :
@@ -440,7 +504,7 @@ def create_plan(database : dict,user_answers : dict ,readme_status : str ,meanin
     database['sections'] = {i:[] for i in range(1,sections["nombre sections"]+1)}
     return (database,sections)
 
-def score(metadata : dict,filepath : Path):
+def score(metadata : dict,filepath : Path) -> int :
     #location part
     scorer = 0
     folders = filepath.parts[:-1]
@@ -485,7 +549,7 @@ def score_calibration(database : dict): # fonction de test qui calcule le score 
         database["files"][file]["score"] = sc
     return database
 #fonction utilitaire d'exploration et de scoring,qui peut prendre une liste de fichiers specifiques en argument,ou aucun(dans ce cas la on explorera tout le repo),
-# et resume + score ces fichiers, evitant de rescorer ou de re-resumer ceux deja résumés et scorés
+# et resume + score ces fichiers, evitant de rescorer ou de re-resumer ceux deja résumés et scorés.(edit : finalement,fonction qui s'occupe uniquement d'un fichier)
 
 #il manque plein de petites optimisations,comme le fait que des fois,beaucoup d 'infos pas forcement necessaires sont passées en chemin (ex les metadat entieres sont passées alors qu'on a besoin que de line_count),
 #l'optimisation de la modularisation des fonctions.Je decoupe bien en petits morceaux mes taches,mais est ce que je les decoupe bien(au bon endroit) ? etc etc
@@ -497,3 +561,14 @@ def score_calibration(database : dict): # fonction de test qui calcule le score 
 #Systeme de score plus poussé : réagit au langage du projet.(+ de points pour les fichiers en langage du projet,aucun bonus pour les sites statiques si on a un serveur python par exemple,et depreciation des fichiers d'un autre langage)
 #Trouver la stack du projet permet aussi de donner des bonus aux fichiers specifiques au projet( requirements en python,recuperer les headers en c,node-packages,)
 #meme pas besoin de se casser la tete on va utiliser un appel LLM pour determiner precisement les presets/langage de la codebase - ou pas
+
+#Pour le choix des documents,on fait passer l'arbre entier + plan,et on demande soit les documents a gerer(a veut dire qu'on supprime tout ce qui concernait le socring),
+#soit des criteres de scoring intelligents en fonction du framework.
+#Je pense qu'il vaudrait mieux garder le scoring,meme si ca va etre plus compliqué a coder,par ce que le scoring permet d'avoir une decision plus fact-checkée en cas d'indecision.
+#Explication : si le llm ne sait pas trop a partir des metadata et du nom si le fichier serait bien dans la docu,il ne l'inclurait pas(ou l'inclurait) dans le doute.
+#Avec le system de scoring,ce meme fichier serait placé avec un score moyen,et une passe de verification unique pour ce fichier serait faite,et il serait inclus(ou pas)
+# basé sur des faits reels,pas sur une decision impulsive.
+#edit : en effet le llm pourrait aussi marquer des documents comme indecis et a verifier.Ce serait une possibilité a considerer.Mais je pense que sur une grande codebase,
+#on ne peut pas garantir qu'il va oublier des fichiers/en rajouter la ou il ne faut pas.Je parle sur une grande variété de modeles llm,pas uniquement les sota llm.
+#En plus de cela,c'est plutot une tache repetitive,avec pas mal d'infos a sortir de maniere precise,ce serait pas approprié de donner ca a un llm.Sur 30+ fichiers,il y a de
+#fortes chances qu'il fasse des erreurs de casses.
