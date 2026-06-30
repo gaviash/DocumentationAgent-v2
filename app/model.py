@@ -19,6 +19,7 @@ first_model = Ollama(
     temperature=0.1,
     context_window=64000,
     json_mode=True,
+    request_timeout=60.0,
     headers={
         "Authorization": f"Bearer {os.getenv('OLLAMA_API_KEY')}"
     }
@@ -51,7 +52,7 @@ def clean_json_response(content: str) -> str:
     return content
 
 
-def query(msg : str,llm,workflow_run_id,tag):
+def query(msg : str,llm,workflow_run_id,tag)-> str:
     metadata={
         "workflow_run_id" : workflow_run_id,
         "name/tag" : tag,

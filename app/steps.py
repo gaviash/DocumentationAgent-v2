@@ -15,6 +15,8 @@ ce meme json sera simplifié et reinjecté a chaque prompt ecrivain
 from collections.abc import Callable
 from model import query,query_json,first_model
 from utils import terminal_ask
+from pathlib import Path
+import json
 
 def ask_all_questions(ask_func: Callable)-> dict[str,str]:
     """Poser et recuperer toutes les questions necessaires"""
@@ -56,7 +58,50 @@ def get_json_resume(ask_all_questions:Callable,workflow_run_id : str) -> dict[st
     return res 
 
 
-
+def write_section(section : str,doc_list : list[str],database_files : dict,pure_database : dict,filtered_answers : dict,workflow_run_id : str)-> str:
+    inject = ""
+    for doc in doc_list:
+        if doc != "tree" :
+            inject += f"Fichier : {doc}\n\n Resume : {database_files[doc]['resume']}.\n"
+        else :
+            inject += f"Voila l'arborescence du reprtoire :  \n {json.dumps(pure_database['tree'])}"
+            
+    msg = f"""
+    Tu es un assistant documentaire ecrivain qui doit ecrire la section d'une documentation.
+    Voila le plan de la section que tu vas écrire :
+    {section} 
+    Et voila les documents necessaires :
+    \"\"\"
+    {inject}
+    \"\"\"
+    Enfin,voila des precisions sur la documentation voulue :
+    {json.dumps(filtered_answers,indent=2,ensure_ascii=False)}.
+    
+    Quelques regles a respecter :
+    -Pour la longueur de ton texte,refere toi a ton plan de section.Reste quand meme sur un texte relativement long,on parle quand meme d'une documentation.
+    -Utilise un ton professionnel mais un texte clair et explicatif.Ton texte peut contenir un peu de blabla,mais dans l'ensemble,reste sur du texte explicatif,dense et concis.
+    -Suis totalement ton plan en ce qui concerne l'ecriture.Puis,si ce que dit le plan est totalement respecté,tu peux ajouter des touches personnelles,si elles restent dans la direction du plan,ou si elles apportent
+    quelque chose au texte.
+    -Le but n'est pas de repeter mecaniquement le plan,mais de partir du plan pour rediger la section finale.
+    -Ecris avec une belle mise en page markdown,propre,lisible,sans trop de titres partout,juste ce qu'il faut.Si besoin tu peux integrer des snippets/blocs de code.
+    -N'invente rien,aucune api,aucune variable,comportement,fonction,ou quelconque element sur lequel tu n'as pas d'informations.
+    -Quand une information serait utile a verifier,ou a creuser pour l'utilisateur(ex : verifier un endpoint,un comportement d'une fonction,etc),precise la reference au fichier
+    de tes informations. 
+    """
+    text = query(msg=msg,llm=first_model,workflow_run_id=workflow_run_id,tag="writing")
+    return text
+    
+def write_all_sections(sections : dict,database : dict,pure_database : dict ,answers : dict,workflow_run_id : str):
+    filtered_answers = {
+        "niveau de detail" : answers["niveau de detail"],
+        "public visé" : answers["public visé"],
+    }
+    
+    for i in range(1,sections["nombre sections"]+1) :
+        text = write_section(sections[str(i)],database["sections"][i],database_files=database['files'],pure_database=pure_database,filtered_answers=filtered_answers,workflow_run_id=workflow_run_id)
+        Path(f"../partie_{i}.md").write_text(text,encoding="utf-8")
+    
+    
 
 """
 Step 1 (brainstorm) : 

@@ -40,16 +40,6 @@ name_bonuses = {
 }
 
 extension_bonuses = {
-    ".py" : 10,
-    ".ts" : 10,
-    ".tsx" : 10,
-    ".js" : 10,
-    ".jsx" : 10,
-    ".go" : 10,
-    ".c" : 10,
-    ".h" : 10,
-    ".java" : 10,
-    ".rs" : 10,
     ".toml" : 5,
     ".yml" : 5,
     ".yaml" : 5,
@@ -59,13 +49,21 @@ extension_bonuses = {
 }
 
 name_penalties = {
-    "test",
-    "asset",
-    "generated",
-    "lockfile",
-    "node_modules",
-    "dist",
-    "build_output"
+    "test" : 40,
+    "asset": 50,
+    "generated" : 50,
+    "lockfile" : 30,
+    "node_modules": 20,
+    "dist" :50 ,
+    "build_output" : 50
+}
+
+path_penalties = {
+    
+}
+
+extensions_penalties = {
+    
 }
 
 
@@ -259,15 +257,20 @@ def readme_usefulness(database : dict,workflow_id : str) -> str :
             
         return res["status"]
         
-def get_meaningful_list(database : dict,workflow_id : str) -> dict:
+def get_meaningful_list(database : dict,answers : dict,workflow_id : str) -> dict:
     msg = f"""Ton but est de fournir une liste des 2-8 fichiers les plus coherents parmi l'arborescence ci-dessous.Choisis les fichiers qui vont donner les infos necessaires pour permettre de construire un plan de 
         redaction de documentation de la codebase.Tu reflechis aux fichiers qui permettent de saisir le plus du projet.Des entrypoints api,des fichiers main,etc etc,tu es capable de bien reflechir.
         Tu ne dois pas inclure le readme dans tes fichiers coherents-utiles,il est deja pris en compte.
         
         Voila l'arborescence des fichiers de la codebase :
-        
+        \"\"\"
         {json.dumps(database['tree'],indent=2,ensure_ascii=False)}
+        \"\"\"
+        Et voila quelques preferences utilisateurs : {json.dumps(answers,indent=2,ensure_ascii=False)}
         
+        Voici quelques regles a suivre :
+        -Repere les fichiers d'importance grace aux instructions utilisateurs sur la documentation.(ex : si il demande une section installation,essaie d'inclure un ou plusieurs fichier de deploiement et d'installation,etc)
+        -Choisis le reste des fichiers par rapport a leur importance et leur coherence,une fois que tu as rempli la demande utilisateur.
         La sortie que tu dois produire est uniquement un json de cette forme :
         {{
             "num_fichiers":[2-8],
@@ -290,26 +293,110 @@ def handle_usefulness_response(database : dict,readme_status : str) -> str | Non
     elif (readme_status == "utile" or readme_status == "insuffisant") and database["files"]["readme.md"]["resume"] != "":
         return f"Le readme a été considéré comme {readme_status},donc considere bien que {msg_utile if readme_status == 'utile' else msg_insuffisant}.Son resume se trouve dans l'entree resume de son objet dans l'arborescence"
 
-def discover_and_adapt_environment(): #remplit des metadata dans la database a propos de la codebase -> stack du projet et choix des listes de bonus
+def discover_and_adapt_environment(pure_database : dict,sections : dict,workflow_run_id : str): #remplit des metadata dans la database a propos de la codebase -> stack du projet et choix des listes de bonus
     #malus pour le score,(ces listes détaillées seront détaillés et crees par codex,pour ne rien oublier)
     #A decider si la decouverte de la stack doit se faire par code ou par llm call.Si c'est par llm call,utiliser un modele puissant,pour qu'il puisse donner
     #un max de regles coherentes.
     #par llm,qui va modifier (effet de bord) les dictionnaires de bonus et de malus
-    pass
+    global path_bonuses,name_bonuses,extension_bonuses,name_penalties
+    msg =f"""
+    Tu es un assistant documentaire qui participe a la documentation d'une codebase.Ton but est de definir les criteres de scoring adaptés a un framework/repo pour determiner le niveau d'utilite d'un document.
+    Voila l'arborescence :
+    \"\"\"
+    {json.dumps(pure_database['files'],indent=2,ensure_ascii=False)}
+    \"\"\"
+    
+    Voila aussi le plan de la documentation : 
+    \"\"\"
+    {json.dumps(sections,indent=2,ensure_ascii=False)}
+    \"\"\"
+    Voila quelques exemples de a quoi ressemblent des criteres de scoring :
+    \"\"\"
+    Extension_rules = {json.dumps(extension_bonuses,indent=2,ensure_ascii=False)}
+    name_rules = {json.dumps(name_bonuses,indent=2,ensure_ascii=False)}
+    path_rules = {json.dumps(path_bonuses,indent=2,ensure_ascii=False)}
+    \"\"\"
+    Quelques regles a respecter :
+    -Il y a 3 categories de bonus et malus : nom d'extension(.py,.c,.java,etc),nom de dossier(src,app,etc - attention sans le / !),nom de fichier - attention sans l'extension ! - (main,utils,etc)
+    -Tu dois definir des listes de regles de scoring en fonction du framework,de l'architecture de la codebase(dossier),et surtout en fonction du plan de documentation.
+    -Cherche a donner des criteres de scoring qui sont coherents avec le plan.
+    -Le total bonus possible pour les trois categories est de 80 points : 40 max pour path,30 max pour name,10 max pour extension.Les malus possibles peuvent theoriquement aller jusqu'a 100,mais c'est a toi de les calibrer pour determiner
+    quelles caracteristiques degrade la probabilité qu'un document ne soit pas relevant a la documentation,et a quel point,pour lui accorder le malus qui convient.(Pareil pour les bonus)
+    -Un fichier avec un nom qui a l'air tres important devrait avoir 30 par exemple.Ne lesine pas sur les notes.N'hesite pas a evaluer de maniere un peu plus optimiste que normalement.Un fichier dans le langage du framework devrait
+    avoir 10,par exemple,un dossier particulierement important devrait avoir sa note proche de 40,voire a 40,etc etc.Pareil pour les malus.N'hesite pas en mettre si besoin.
+    -Quand tu ecris des noms de fichiers/dossiers, ne fais pas attention a la casse.Mets tout en minuscule.
+    -Tu peux bypasser la regle du maximum quand un fichier te parait tres approprié/special,et lui accorder beaucoup de points si necessaire.(ex : requirements dans un projet python, a 70,ou un dockerfile a 70,pour leur garantir un bon score)
+    N'hesite pas a le faire pour les fichier qui en ont besoin.
+    -Pour mettre un bonus,tu mets juste un modifier positif,pour mettre un malus,un modifier negatif.
+    -Voila l'objet json que tu dois retourner/repondre,strictement,et rien d'autre :
+    {{
+        extension_rules = {{
+            <extension> : <modifier>,
+            etc
+        }},
+        name_rules = {{
+            <nom> : <modifier>,
+            etc
+        }}
+        path_rules = {{
+            <folder_name> : <modifier>,
+            etc
+        }}
+    }}
+    Ne mets pas de commentaire dans ta reponse json.Juste renvoie l'objet.
+    Voila le json a remplir,commence :
+    """
+    
+    dic = query_json(msg=msg,llm=first_model,workflow_run_id=workflow_run_id,tag="discovering")
+    extension_bonuses =  dic["extension_rules"]
+    path_bonuses = dic["path_rules"]
+    name_bonuses = dic["name_rules"]
 
 
-def classify_all_docs(database:dict,sections :dict,meaningful_list :dict, workflow_id : str)-> dict : #apres le plan
+def classify_all_docs(database:dict,sections :dict,meaningful_list :dict,pure_database : dict, workflow_id : str)-> dict : #apres le plan
     for file in database["files"]:
         strpath = database["files"][file]["path"]
-        if strpath in meaningful_list or file == "readme.md":
+        if strpath in meaningful_list.values() or file == "readme.md":
             database = score_resume_associate(database=database,sections=sections,filepath=Path(strpath),mode="associate",workflow_run_id=workflow_id)
         else :
+            print(f"full : {strpath}")
             database = score_resume_associate(database=database,sections=sections,filepath=Path(strpath),mode="full",workflow_run_id=workflow_id)
+    for i in classify_tree(pure_database=pure_database,sections=sections,workflow_run_id=workflow_id)["section"]:
+        database["sections"][i].append("tree")
+    
     #avant le score,on recupere l'environnement(fonction discovery)
-    #a la fin (une sorte de finally),on associe aussi l'arborescence.
+    #a la fin (une sorte de finally),on associe aussi l'arborescence.(fait)
     return database
     
-        
+def classify_tree(pure_database : dict,sections : dict,workflow_run_id : str)-> dict:
+    msg = f"""
+    Tu es un assistant documentaire,et ta tache est d'associer l'arborescence du repetoire a documenter a une ou plusieurs sections d'une documentation.
+    
+    Voici l'arborescence :
+    \"\"\"
+    {json.dumps(pure_database,indent=2,ensure_ascii=False)}
+    \"\"\"
+    
+    Voici les sections du plan :
+    \"\"\"
+    {json.dumps(sections,indent=2,ensure_ascii=False)}
+    \"\"\"
+    
+    Voici quelques regles a respecter :
+    -Tu dois associer l'arborescence en elle-meme a la ou les sections qu'il va documenter le mieux.(A quelle section ca va profiter d'avoir l'arborescence du repertoire ?)
+    -Pose toi clairement la question : si plusieurs ecrivains redigeaient chacun une section,a quel(s) ecrivain(s) ca servirait reellement d'avoir le repertoire/arborescence a portée de main ? 
+    -N'associe un document a plusieurs sections que si le documents va reellement servir aux deux sections.Si il y a des informations dans un document
+    qui sont partagées dans deux sections par exemple.
+    -Tu repondras sous la forme d'un bloc json comme ci dessous,et uniquement avec ce bloc,sans modifications,sans changement,
+    et surtout,sans guillemets autour de la liste : 
+    {{
+        "section" : [<numero_de_section>,<numero_de_section>,etc]
+    }}
+    Voila le debut du json,remplis : 
+    """
+    
+    return query_json(msg=msg,llm=first_model,workflow_run_id=workflow_run_id,tag="tree association")
+    
     
 def score_resume_associate(database : dict,sections : dict,filepath : Path,mode : str,workflow_run_id : str)-> dict: 
     #si mode = full,on fait tout,si mode = associate,on ne refait pas scoring + resume,juste on associe,et si mode = classic(finalement pas implementé),on score et on resume,sans associer.Ex pour les documents d'infos du planner,en mode classique,apres 
@@ -371,7 +458,7 @@ def decide(metadata:dict,sections : dict,workflow_run_id : str):
     {json.dumps(sections,indent=2,ensure_ascii=False)}.
     Quelques regles a respecter absolument : 
     -Le document est relevant uniquement si il va servir a la documentation d'une ou plusieurs sections.
-    -Il est relevant uniquement si tu vois son utilité claire dans la documentation.
+    -Il est relevant uniquement si tu vois son utilité claire dans la redaction d'un section de la documentation.
     -Si le document est relevant, tu le resumeras et tu l'associeras a une/plusieurs sections.
     -Le résumé ne doit pas contenir d'invention,ni de suppositions hallucinées.
     -Le résumé doit dire en premier ce qu'est le fichier/document,puis developper.
@@ -444,7 +531,7 @@ def associate(database : dict,sections : dict,filepath : Path,workflow_run_id : 
     -Tu dois associer le document a la ou les sections qu'il va documenter le mieux
     -N'associe un document a plusieurs sections que si le documents va reellement servir aux deux sections.Si il y a des informations dans un document
     qui sont partagées dans deux sections par exemple
-    -Tu repondras sous la forme d'un bloc json comme ci desosus,et uniquement avec ce bloc,sans modifications,sans changement,
+    -Tu repondras sous la forme d'un bloc json comme ci dessous,et uniquement avec ce bloc,sans modifications,sans changement,
     et surtout,sans guillemets autour de la liste : 
     {{
         "section" : [<numero_de_section>,<numero_de_section>,etc]
@@ -477,7 +564,7 @@ def create_plan(database : dict,user_answers : dict ,readme_status : str ,meanin
     Preferences de l'utilisateur pour la documentation : 
     {json.dumps(answers,indent=2,ensure_ascii=False)}
     Regles a absolument respecter :
-    - Une petite documentation tourne autour de 3-4 sections,une moyenne autour de 5,6,7 et une grande 5,6,7 ou plus.
+    - Une petite documentation tourne autour de 3-4 sections,une moyenne autour de 5,6,7 et une grande 5,6,7 ou plus.Ce sont uniquement des indications.Ne rajoute/n'enleve pas de sections a cause de ces instructions.Ce sont des reperes.
     - Tu dois proposer une approche de plan détaillée
     - Tu dois suivre les preferences de l'utilisateur
     - Tu dois proposer un plan sans blabla,sans phrase inutile,dense,mais complet et assez long
@@ -488,7 +575,9 @@ def create_plan(database : dict,user_answers : dict ,readme_status : str ,meanin
     - Les sections doivent etre détaillées et denses.Sois bavard sur les descriptions de section,n'hesite pas a preciser ce qui doit etre dedans,etc
     - Les sections doivent eviter de se marcher dessus sur les sujets.Chaque section doit aborder un domaine,qui n'est pas du tout abordable dans une autre.
     Ex : ne pas mettre une section Deploiement docker,une section configuration variables env,ET une section installation et deploiement local.C'est beaucoup trop repetitif.Compacte tout en une seule "Configuration,variables env et deploiement"
-    Suis ce principe sur tous les sujets.
+    Suis STRICTEMENT ce principe sur tous les sujets.Aucune repetition dans les sections et dans le contenu des sections.La documentation
+    s'écrit section par section,donc le plan des sections ne doit pas contenir de repetitions.
+    -Sépare bien chaque section,aucune section ne doit reparler ou retraiter des informations/sujets qui ont déja étés mentionnés autre part dans le plan.
     Chaque ecrivain n'aura acces qu'aux informations de sa propre section,donc ne melange pas les sujets.
     - Tu repondras sous la stricte forme d'un objet json de la forme qui suit :
     {{
@@ -508,16 +597,17 @@ def score(metadata : dict,filepath : Path) -> int :
     #location part
     scorer = 0
     folders = filepath.parts[:-1]
-    #print(folders)
+    #print(folders) #test de debug
     best = 0
     for folder in folders :
+        folder = folder.lower()
         val = path_bonuses.get(folder,0)
         if val > best :
             best = val
-    scorer += best 
+    scorer += best if best != 0 else 10
     
     #name part 
-    name = filepath.stem
+    name = filepath.stem.lower()
     scorer += name_bonuses.get(name,0)
     
     #line count part
@@ -537,7 +627,7 @@ def score(metadata : dict,filepath : Path) -> int :
     
     #et extension
     scorer += extension_bonuses.get(metadata["extension"],0)
-    
+    print(f"Score de {filepath.as_posix()} : {scorer}")
     return scorer
 
 
@@ -548,6 +638,7 @@ def score_calibration(database : dict): # fonction de test qui calcule le score 
         #print(sc)
         database["files"][file]["score"] = sc
     return database
+
 #fonction utilitaire d'exploration et de scoring,qui peut prendre une liste de fichiers specifiques en argument,ou aucun(dans ce cas la on explorera tout le repo),
 # et resume + score ces fichiers, evitant de rescorer ou de re-resumer ceux deja résumés et scorés.(edit : finalement,fonction qui s'occupe uniquement d'un fichier)
 
@@ -571,4 +662,7 @@ def score_calibration(database : dict): # fonction de test qui calcule le score 
 #edit : en effet le llm pourrait aussi marquer des documents comme indecis et a verifier.Ce serait une possibilité a considerer.Mais je pense que sur une grande codebase,
 #on ne peut pas garantir qu'il va oublier des fichiers/en rajouter la ou il ne faut pas.Je parle sur une grande variété de modeles llm,pas uniquement les sota llm.
 #En plus de cela,c'est plutot une tache repetitive,avec pas mal d'infos a sortir de maniere precise,ce serait pas approprié de donner ca a un llm.Sur 30+ fichiers,il y a de
-#fortes chances qu'il fasse des erreurs de casses.
+#fortes chances qu'il fasse des erreurs de casses sur les noms de fichiers etc
+
+#restant a faire : 
+#writer(injecté de plan de section,instructions users + resume des documents reliés), + export.Review sera ajouté a la fin
