@@ -564,7 +564,7 @@ def create_plan(database : dict,user_answers : dict ,readme_status : str ,meanin
     Preferences de l'utilisateur pour la documentation : 
     {json.dumps(answers,indent=2,ensure_ascii=False)}
     Regles a absolument respecter :
-    - Une petite documentation tourne autour de 3-4 sections,une moyenne autour de 5,6,7 et une grande 5,6,7 ou plus.Ce sont uniquement des indications.Ne rajoute/n'enleve pas de sections a cause de ces instructions.Ce sont des reperes.
+    - Une petite documentation tourne autour de 2-3-4 sections,une moyenne autour de 5,6 et une grande 6,7 ou plus.Ce sont uniquement des indications.Ne rajoute/n'enleve pas de sections a cause de ces instructions.Ce sont des reperes.
     - Tu dois proposer une approche de plan détaillée
     - Tu dois suivre les preferences de l'utilisateur
     - Tu dois proposer un plan sans blabla,sans phrase inutile,dense,mais complet et assez long
@@ -578,7 +578,9 @@ def create_plan(database : dict,user_answers : dict ,readme_status : str ,meanin
     Suis STRICTEMENT ce principe sur tous les sujets.Aucune repetition dans les sections et dans le contenu des sections.La documentation
     s'écrit section par section,donc le plan des sections ne doit pas contenir de repetitions.
     -Sépare bien chaque section,aucune section ne doit reparler ou retraiter des informations/sujets qui ont déja étés mentionnés autre part dans le plan.
-    Chaque ecrivain n'aura acces qu'aux informations de sa propre section,donc ne melange pas les sujets.
+    Chaque ecrivain n'aura acces qu'aux informations de sa propre section,donc ne melange pas les sujets.Deux sections ne doivent meme pas mentionner un meme element.Si tu expliques les variables env une fois,n'en reparle pas.
+    -TRES IMPORTANT : Pas de redondance.Si tu expliques l'installation dans une section,ne l'inclus pas dans l'introduction,et vice-versa.Si tu n'as pas assez d'infos pour faire en sorte de ne pas te repeter,reduis le nombre de sections.
+    il est prioritaire d'eviter toute forme deja-vu et de redondance.
     - Tu repondras sous la stricte forme d'un objet json de la forme qui suit :
     {{
         "nombre sections" : x,
@@ -604,7 +606,7 @@ def score(metadata : dict,filepath : Path) -> int :
         val = path_bonuses.get(folder,0)
         if val > best :
             best = val
-    scorer += best if best != 0 else 10
+    scorer += (best if best != 0 else 10)
     
     #name part 
     name = filepath.stem.lower()

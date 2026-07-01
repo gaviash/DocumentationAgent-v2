@@ -16,6 +16,7 @@ from collections.abc import Callable
 from model import query,query_json,first_model
 from utils import terminal_ask
 from pathlib import Path
+import pypandoc
 import json
 
 def ask_all_questions(ask_func: Callable)-> dict[str,str]:
@@ -79,14 +80,19 @@ def write_section(section : str,doc_list : list[str],database_files : dict,pure_
     
     Quelques regles a respecter :
     -Pour la longueur de ton texte,refere toi a ton plan de section.Reste quand meme sur un texte relativement long,on parle quand meme d'une documentation.
-    -Utilise un ton professionnel mais un texte clair et explicatif.Ton texte peut contenir un peu de blabla,mais dans l'ensemble,reste sur du texte explicatif,dense et concis.
+    -Utilise un ton professionnel mais un texte clair et explicatif.Ton texte reste sur du texte explicatif,dense et concis.
     -Suis totalement ton plan en ce qui concerne l'ecriture.Puis,si ce que dit le plan est totalement respecté,tu peux ajouter des touches personnelles,si elles restent dans la direction du plan,ou si elles apportent
     quelque chose au texte.
     -Le but n'est pas de repeter mecaniquement le plan,mais de partir du plan pour rediger la section finale.
     -Ecris avec une belle mise en page markdown,propre,lisible,sans trop de titres partout,juste ce qu'il faut.Si besoin tu peux integrer des snippets/blocs de code.
     -N'invente rien,aucune api,aucune variable,comportement,fonction,ou quelconque element sur lequel tu n'as pas d'informations.
+    -Ne te repete pas.Apporte quelque chose de nouveau a chaque phrase.
     -Quand une information serait utile a verifier,ou a creuser pour l'utilisateur(ex : verifier un endpoint,un comportement d'une fonction,etc),precise la reference au fichier
     de tes informations. 
+    -Commence ta section par le titre de la section.
+    -Quand tu as un/des diagrammes mermaid a faire,fais particulierement attention a la syntaxe.Pas de syntaxe trop compliquée on veut eviter la casse.
+    -Ne mets des diagrammes que si c'est necessaire/apporte quelque chose.
+    -Tu écris tes sections toujours en francais
     """
     text = query(msg=msg,llm=first_model,workflow_run_id=workflow_run_id,tag="writing")
     return text
@@ -101,7 +107,20 @@ def write_all_sections(sections : dict,database : dict,pure_database : dict ,ans
         text = write_section(sections[str(i)],database["sections"][i],database_files=database['files'],pure_database=pure_database,filtered_answers=filtered_answers,workflow_run_id=workflow_run_id)
         Path(f"../partie_{i}.md").write_text(text,encoding="utf-8")
     
-    
+def convert_to_docx(section_number : int): 
+    #potentiellement rajouter des arguments pour avoir telle ou telle conversion,etc.
+    #Arguments pour donner un reference doc precis (changer la mise en page)
+    pypandoc.convert_file(
+        source_file=[f"../partie_{i}.md" for i in range(1,section_number+1)],
+        to="docx",
+        format="markdown+pipe_tables+fenced_code_blocks+fenced_divs+smart",
+        outputfile=Path("../documentation.docx"),
+        extra_args= [
+            "--toc",
+            "--reference-doc=../reference-doc.docx",
+        ]
+    )
+    pass
 
 """
 Step 1 (brainstorm) : 

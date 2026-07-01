@@ -1,5 +1,5 @@
 from model import first_model,query,query_json
-from steps import get_json_resume,ask_all_questions,write_all_sections
+from steps import get_json_resume,ask_all_questions,write_all_sections,convert_to_docx
 from utils import make_inventory,readme_usefulness,get_meaningful_list,score_calibration,score_resume_associate,create_plan,discover_and_adapt_environment,classify_all_docs
 from uuid import uuid4
 from pathlib import Path
@@ -50,6 +50,7 @@ async def main():
     classify_all_docs(database=database,pure_database=pure_database,sections=plan,meaningful_list=meaningful_list,workflow_id=workflow_id)
     write_all_sections(sections=plan,database=database,pure_database=pure_database,answers=questions,workflow_run_id=workflow_id)
     #print(f"Database : {json.dumps(database['files'],indent=2,ensure_ascii=False)}\n\n Sections : {database['sections']}")
+    convert_to_docx(plan["nombre sections"])
     
     
 asyncio.run(main())
