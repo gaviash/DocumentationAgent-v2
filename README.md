@@ -31,7 +31,7 @@ Cette documentation couvre les fichiers suivis par Git. Les fichiers locaux, sec
 | Fichier | Role |
 |---|---|
 | `.gitignore` | Exclut l'environnement local, les caches, logs, dossiers de generation et sorties Markdown de `app/process`. |
-| `requirements.txt` | Liste les dependances Python du prototype, dont LlamaIndex/Ollama, Langfuse, Pathspec et Pypandoc. |
+| `requirements.txt` | Liste les dependances Python du prototype, dont LlamaIndex/Ollama, Langfuse, Pathspec, `pypandoc-binary` et `merm`. |
 | `app/main.py` | Point d'entree experimental qui orchestre le workflow complet : inventaire, questions, README, plan, scoring, association, redaction et export. |
 | `app/model.py` | Configure les clients Ollama, charge l'environnement, instrumente les appels avec Langfuse et fournit `query` / `query_json`. |
 | `app/steps.py` | Gere les questions utilisateur, la redaction des sections et les exports `md`, `docx`, `odt`. |
@@ -99,7 +99,7 @@ Fonctions d'export :
 - `convert_to_odt(...)` convertit les sections en `documentation.odt` avec Pypandoc ;
 - `export(...)` choisit l'export selon le format demande.
 
-Pour `docx` et `odt`, Pandoc doit etre disponible sur la machine. Les exports utilisent les fichiers de reference versionnes dans `app/process` :
+Les dependances d'export et de rendu sont empaquetees autant que possible dans les dependances Python : Pandoc est fourni via `pypandoc-binary`, et le rendu Mermaid passe par `merm`. Les exports `docx` et `odt` utilisent les fichiers de reference versionnes dans `app/process` :
 
 - `app/process/reference-doc.docx`
 - `app/process/reference-doc.odt`
@@ -178,7 +178,7 @@ Installer les dependances Python :
 pip install -r requirements.txt
 ```
 
-Pour les exports `docx` et `odt`, installer aussi Pandoc si la distribution locale de Pypandoc ne le fournit pas.
+Les dependances necessaires au pipeline sont prevues pour etre portables et installees avec `requirements.txt`. Pandoc est embarque via `pypandoc-binary`, et le rendu des diagrammes Mermaid est gere via `merm`; il n'est donc pas necessaire d'installer Pandoc separement pour l'usage standard.
 
 ## Configuration
 

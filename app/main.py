@@ -1,5 +1,5 @@
 from model import first_model,query,query_json
-from steps import get_json_resume,ask_all_questions,write_all_sections,export
+from steps import get_json_resume,ask_all_questions,write_all_sections,export,detect_export_mermaid
 from utils import make_inventory,readme_usefulness,get_meaningful_list,score_calibration,score_resume_associate,create_plan,discover_and_adapt_environment,classify_all_docs
 from uuid import uuid4
 from pathlib import Path
@@ -50,7 +50,12 @@ async def main():
     classify_all_docs(database=database,pure_database=pure_database,sections=plan,meaningful_list=meaningful_list,workflow_id=workflow_id)
     write_all_sections(sections=plan,database=database,pure_database=pure_database,answers=questions,workflow_run_id=workflow_id)
     #print(f"Database : {json.dumps(database['files'],indent=2,ensure_ascii=False)}\n\n Sections : {database['sections']}")
-    export(format=questions["format"],section_number=plan["nombre sections"])
+    export(format=questions["format"],section_number=plan["nombre sections"],workflow_run_id=workflow_id)
     
     
-asyncio.run(main())
+#asyncio.run(main())
+
+
+database = make_inventory(r"C:\Users\Gavriel.Myara\Desktop\DocumentationAgentv2\app\process\little_agent")
+
+export(format="docx",section_number=4,workflow_run_id="1234")

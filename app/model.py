@@ -31,6 +31,7 @@ fast_model=Ollama(
     temperature=0.1,
     context_window=64000,
     json_mode=True,
+    request_timeout=60.0,
     headers={
         "Authorization": f"Bearer {os.getenv('OLLAMA_API_KEY')}"
     }
@@ -43,6 +44,8 @@ def clean_json_response(content: str) -> str:
         content = content.removeprefix("```json").strip()
     elif content.startswith("```"):
         content = content.removeprefix("```").strip()
+    elif content.startswith("```mermaid"):
+        content = content.removeprefix("```mermaid").strip()
     if content.endswith("```"):
         content = content.removesuffix("```").strip()
     start = content.find("{")

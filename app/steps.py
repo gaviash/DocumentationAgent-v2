@@ -13,11 +13,15 @@ Premiere etape poser questions,avec une ou deux requetes reucperer un json du ge
 ce meme json sera simplifié et reinjecté a chaque prompt ecrivain
 """
 from collections.abc import Callable
-from model import query,query_json,first_model
+from model import query,query_json,first_model,fast_model
 from utils import terminal_ask
 from pathlib import Path
+from merm import render_to_file
+from resvg_py import svg_to_bytes
+from uuid import uuid4
 import pypandoc
 import json
+import re
 
 def ask_all_questions(ask_func: Callable)-> dict[str,str]:
     """Poser et recuperer toutes les questions necessaires"""
@@ -90,7 +94,6 @@ def write_section(section : str,doc_list : list[str],database_files : dict,pure_
     -Quand une information serait utile a verifier,ou a creuser pour l'utilisateur(ex : verifier un endpoint,un comportement d'une fonction,etc),precise la reference au fichier
     de tes informations. 
     -Commence ta section par le titre de la section.
-    -Quand tu as un/des diagrammes mermaid a faire,fais particulierement attention a la syntaxe.Pas de syntaxe trop compliquée on veut eviter la casse.
     -Ne mets des diagrammes que si c'est necessaire/apporte quelque chose,ou si c'est inclus dans le plan.
     -Tu écris tes sections toujours en francais.
     """
@@ -107,9 +110,10 @@ def write_all_sections(sections : dict,database : dict,pure_database : dict ,ans
         text = write_section(sections[str(i)],database["sections"][i],database_files=database['files'],pure_database=pure_database,filtered_answers=filtered_answers,workflow_run_id=workflow_run_id)
         Path(f"../partie_{i}.md").write_text(text,encoding="utf-8")
     
-def convert_to_docx(section_number : int): 
+def convert_to_docx(section_number : int,workflow_run_id : str): 
     #potentiellement rajouter des arguments pour avoir telle ou telle conversion,etc.
     #Arguments pour donner un reference doc precis (changer la mise en page)
+    detect_export_mermaid(section_number=section_number,workflow_run_id=workflow_run_id)
     pypandoc.convert_file(
         source_file=[f"../partie_{i}.md" for i in range(1,section_number+1)],
         to="docx",
@@ -118,11 +122,13 @@ def convert_to_docx(section_number : int):
         extra_args= [
             "--toc",
             "--reference-doc=../reference-doc.docx",
+            "--resource-path=../"
         ]
     )
     pass
 
-def convert_to_odt(section_number : int):
+def convert_to_odt(section_number : int,workflow_run_id : str):
+    detect_export_mermaid(section_number=section_number,workflow_run_id=workflow_run_id)
     pypandoc.convert_file(
         source_file=[f"../partie_{i}.md" for i in range(1,section_number+1)],
         to="odt",
@@ -131,6 +137,7 @@ def convert_to_odt(section_number : int):
         extra_args= [
             "--toc",
             "--reference-doc=../reference-doc.odt",
+            "--resource-path=../"
         ]
     )
 
@@ -141,15 +148,68 @@ def md_export(section_number : int):
             output.write(Path(f"../partie_{i}.md").read_text(encoding="utf-8"))
             output.write("\n\n")
             
-def export(format : str,section_number : int):
+def export(format : str,section_number : int,workflow_run_id : str):
     match format :
         case "docx" :
-            convert_to_docx(section_number=section_number)
+            convert_to_docx(section_number=section_number,workflow_run_id=workflow_run_id)
         case "md" :
             md_export(section_number=section_number)
         case "odt" :
-            convert_to_odt(section_number=section_number)
-        
+            convert_to_odt(section_number=section_number,workflow_run_id=workflow_run_id)
+
+
+def detect_export_mermaid(section_number : int,workflow_run_id : str):
+    pattern_re = re.compile(
+    r"```[ \t]*mermaid[^\n]*\n(?P<content>.*?)\n```",
+    re.DOTALL | re.IGNORECASE,
+)
+    for i in range(1,section_number+1):
+        detect_return_mermaid(section_to_analyze=i,diagram_pattern=pattern_re,workflow_run_id=workflow_run_id)
+
+def detect_return_mermaid(section_to_analyze : int,diagram_pattern : re.Pattern,workflow_run_id : str):
+    #detection d'un diagramme, -> generation d'un uuid, -> rendu d'un svg avec cet uuid en nom,et remplacement du diagramme dans le fichier par une reference vers le fichier rendu.
+    doc_uuid = ""
+    section = Path(f"../partie_{section_to_analyze}.md")
+    text = section.read_text(encoding="utf-8").strip()
+    for match in reversed(list(diagram_pattern.finditer(text))):
+        print("match trouvé !")
+        doc_uuid = uuid4()
+        content = match.group("content").strip()
+        content = upgrade_and_fix_diagram(content=content,workflow_run_id=workflow_run_id)
+        render_to_file(content,f"../{doc_uuid}.svg")
+        png_bytes = svg_to_bytes(Path(f"../{doc_uuid}.svg").read_text(encoding="utf-8"))
+        Path(f"../{doc_uuid}.png").write_bytes(png_bytes)
+        text = text[:match.start()] + f"![Diagramme Mermaid]({doc_uuid}.png)" + text[match.end():]
+    section.write_text(text,encoding="utf-8")
+    #iteration,generation(cleaner/stripper la chaine trouvée) et replace sur le match trouvé
+
+def upgrade_and_fix_diagram(content : str,workflow_run_id : str):
+    msg = f"""
+    Tu es un assistant design pour diagrammes mermaid.Ton but est de transformer/ameliorer les diagrammes que tu recois.Tu dois eviter/corriger toute erreur
+    de casse/syntaxe,ameliorer le visuel,le placement,eviter que les elements se marchent dessus,et rendre le diagramme comprehensible et aéré.
+    Voila le diagramme :
+    {content}
+    
+    Voici quelques regles a respecter :
+    -Fais particulierement attention a la syntaxe.Pas de syntaxe trop compliquée, on veut eviter la casse.
+    -Dans le diagramme,déclare chaque nœud dans un seul subgraph et place les flèches entre sous-graphes après leurs déclarations,
+    sans réutiliser un même nœud comme membre de plusieurs blocs.N'utilise des subgraph que pour regrouper au moins deux nœuds différents ;
+    si un groupe ne contient qu’un seul nœud, supprime le subgraph et garde seulement le nœud.
+    -Ne duplique jamais le nom d’un subgraph et le nom de son unique nœud.
+    -Rends le visuel aéré,bien organisé,tout en faisant en sorte que rien ne se marche dessus visuellement.
+    -Si besoin est,tu peux reduire la quantité de texte,pour eviter que le diagramme soit trop chargé.
+    -Rends le plus attractif/moderne a l'oeil,il ne faut pas qu'il soit fade.
+    -fais des schémas visuels sobres : nœuds courts de 1 à 6 mots, chemins de fichiers et détails techniques dans le texte autour, flèches qui ne se marchent pas dessus et pas trop nombreuses,
+    labels courts, flowchart LR pour l’architecture, et évite de mélanger runtime, configuration et déploiement dans le même graphe, 
+    sauf si c’est indispensable.
+    -N'ajoute pas de theme.
+    -Ajoute une configuration Mermaid init avec nodeSpacing 70, rankSpacing 90 et diagramPadding 30 pour éviter que les nœuds soient collés.Ajoute le necessaire
+    pour eviter que le texte marche sur les noeuds,et vice-versa.
+    -Réponds uniquement avec le diagramme Mermaid brut, sans bloc Markdown.
+    """
+    return query(msg=msg,llm=fast_model,workflow_run_id=workflow_run_id,tag="improving diagram")
+
+
 """
 Step 1 (brainstorm) : 
 -> res = get json resume 

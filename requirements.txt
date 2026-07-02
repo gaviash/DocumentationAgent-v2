@@ -8,4 +8,6 @@ litellm==1.89.1
 llama-index-core==0.14.22
 llama-index-llms-ollama==0.10.1
 pathspec==1.1.1
-pypandoc==1.17
+pypandoc-binary==1.17
+merm==0.1.5
+resvg_py==0.3.3

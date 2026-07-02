@@ -108,3 +108,5 @@ aussi des problemes pour organiser mon code
 plus tard on pourra ajouter des exclusions basées sur les reponses utilisateurs,etc,mais uniquement a la fin
 
 Bonne tracabilité langfuse
+
+si problemes trop recurrents avec la lib merm,on utilisera kroki,et en deploiement un conteneur kroki + le conteneur,ou on empaquettera les dependances necessaires
