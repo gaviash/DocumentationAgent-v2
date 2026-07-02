@@ -1,95 +1,115 @@
 # DocumentationAgent v2
 
-DocumentationAgent v2 est un prototype d'agent de generation de documentation pour une codebase. Il explore un depot, construit une carte de fichiers, interroge un modele LLM pour comprendre les besoins utilisateur, puis prepare un plan de documentation base sur les fichiers juges pertinents.
+DocumentationAgent v2 est un prototype d'agent de generation de documentation pour codebase. Il explore un depot cible, construit une carte des fichiers, interroge un modele LLM pour cadrer le besoin utilisateur, produit un plan, associe les fichiers utiles aux sections, redige chaque section puis exporte la documentation.
 
-Le projet est encore en construction : l'exploration, le resume, le scoring, l'association fichier/section et la generation d'un plan existent deja en partie, mais l'ecriture finale de la documentation, la review et l'export ne sont pas encore implementes.
+Le projet reste experimental, mais le flux principal va maintenant plus loin qu'un simple plan : il peut generer des fichiers Markdown de section et produire une sortie finale en `md`, `docx` ou `odt`.
 
-## Principe
+## Workflow
 
-L'objectif est d'eviter une generation directe et floue de documentation. Le workflow est decoupe en etapes explicites :
+Le workflow vise a eviter une generation directe et floue. Il decoupe la documentation en etapes :
 
 1. Interroger l'utilisateur sur la documentation attendue.
 2. Transformer les reponses en JSON exploitable.
-3. Explorer la codebase en respectant le `.gitignore` du projet cible.
+3. Explorer la codebase cible en respectant son `.gitignore`.
 4. Construire une carte de fichiers avec metadonnees.
-5. Evaluer si le README du projet cible est utile.
-6. Choisir quelques fichiers importants pour comprendre le projet.
+5. Evaluer si le README cible est utile, insuffisant ou inutilisable.
+6. Selectionner les fichiers importants pour comprendre le projet.
 7. Resumer ces fichiers avec un LLM.
-8. Generer un plan de documentation en JSON.
-9. Scorer, resumer et associer les fichiers aux sections du plan.
+8. Generer un plan JSON de documentation.
+9. Adapter les regles de scoring au projet et au plan.
+10. Scorer, resumer et associer les fichiers aux sections.
+11. Associer l'arborescence aux sections qui en ont besoin.
+12. Rediger chaque section en Markdown.
+13. Exporter la documentation finale.
 
-Les etapes d'ecriture section par section, de review et d'export sont decrites dans les notes du projet, mais restent a developper.
+La review globale reste a ajouter.
 
 ## Fichiers suivis par Git
 
-Cette documentation ne couvre que les fichiers suivis par Git. Les dossiers et fichiers ignores ou non suivis, comme `.env`, `.venv`, `docsgen`, `logs.log`, `prompts/` ou `bloc-notes.md`, ne sont pas documentes ici.
+Cette documentation couvre les fichiers suivis par Git. Les fichiers locaux, secrets, fixtures de test, generations et dossiers ignores ne sont pas detailles ici.
 
 | Fichier | Role |
 |---|---|
-| `.gitignore` | Definit les fichiers locaux a exclure du depot : environnement virtuel, cache, logs, donnees de process, documentation generee, etc. |
-| `requirements.txt` | Liste les dependances Python du prototype. |
-| `app/main.py` | Point d'entree experimental du workflow. Cree un `workflow_id`, lance l'inventaire, interroge l'utilisateur, analyse le README, choisit les fichiers utiles, cree le plan et lance une association partielle des documents. |
-| `app/model.py` | Configure les modeles Ollama via LlamaIndex, charge les variables d'environnement, instrumente les appels avec Langfuse et fournit `query` / `query_json`. |
-| `app/steps.py` | Contient les questions posees a l'utilisateur et la transformation des reponses libres en JSON resume. |
-| `app/utils.py` | Regroupe l'exploration de fichiers, la lecture du `.gitignore`, le scoring, le resume de fichiers, l'association aux sections et la creation du plan. |
-| `bloc-notes.txt` | Notes de conception sur le workflow cible, les arbitrages de planification, le scoring, l'association des fichiers et la future generation. |
-| `token_consumption.md` | Estimation de consommation de tokens par etape du workflow. |
+| `.gitignore` | Exclut l'environnement local, les caches, logs, dossiers de generation et sorties Markdown de `app/process`. |
+| `requirements.txt` | Liste les dependances Python du prototype, dont LlamaIndex/Ollama, Langfuse, Pathspec et Pypandoc. |
+| `app/main.py` | Point d'entree experimental qui orchestre le workflow complet : inventaire, questions, README, plan, scoring, association, redaction et export. |
+| `app/model.py` | Configure les clients Ollama, charge l'environnement, instrumente les appels avec Langfuse et fournit `query` / `query_json`. |
+| `app/steps.py` | Gere les questions utilisateur, la redaction des sections et les exports `md`, `docx`, `odt`. |
+| `app/utils.py` | Contient l'exploration de fichiers, la lecture du `.gitignore`, le scoring, les resumes, les associations fichier/section et la creation du plan. |
+| `bloc-notes.txt` | Notes de conception sur le workflow cible, les arbitrages de scoring et les futures evolutions. |
+| `token_consumption.md` | Estimation de consommation de tokens par etape. |
 | `README.md` | Documentation du projet. |
 
-## Architecture actuelle
+## Architecture
 
 ### `app/model.py`
 
-Le module modele configure deux clients Ollama :
+Le module configure deux modeles Ollama via LlamaIndex :
 
-- `first_model`, utilise pour la plupart des appels structurants ;
-- `fast_model`, prevu pour des appels plus rapides ou de review.
+- `first_model`, modele principal utilise pour les appels structurants ;
+- `fast_model`, modele prevu pour des appels rapides ou de review.
 
-Les variables d'environnement attendues sont chargees avec `python-dotenv` :
+Variables d'environnement utilisees :
 
 - `OLLAMA_MODEL`
 - `OLLAMA_BASE_URL`
 - `OLLAMA_API_KEY`
 - `REVIEW_MODEL`
 
-Les appels LLM sont traces avec Langfuse via `openinference-instrumentation-llama-index`.
+Les appels sont traces avec Langfuse via `openinference-instrumentation-llama-index`.
 
 Fonctions principales :
 
-- `clean_json_response(content)` nettoie une reponse LLM entouree de fences Markdown ou de texte parasite pour en extraire un objet JSON.
-- `query(msg, llm, workflow_run_id, tag)` execute un appel chat et l'enregistre dans Langfuse.
+- `clean_json_response(content)` extrait un objet JSON depuis une reponse LLM eventuellement entouree de fences Markdown.
+- `query(msg, llm, workflow_run_id, tag)` execute un appel chat et le trace dans Langfuse.
 - `query_json(msg, llm, workflow_run_id, tag)` appelle `query`, nettoie la reponse et recommence tant que le JSON n'est pas valide.
 
 ### `app/steps.py`
 
-Ce module gere l'etape de cadrage utilisateur.
+Ce module gere les interactions de haut niveau avec l'utilisateur et la production finale.
 
-`ask_all_questions(ask_func)` pose huit questions :
+`ask_all_questions(ask_func)` pose les questions de cadrage :
 
-- taille souhaitee ;
+- taille de la documentation ;
 - niveau de detail ;
 - presence d'un diagramme Mermaid ;
 - format de sortie ;
 - public vise ;
 - objectif ;
-- fichiers ou sections a exclure ;
+- exclusions ;
 - commentaires libres.
 
-`get_json_resume(...)` envoie les reponses au modele pour produire un dictionnaire normalise contenant notamment `taille`, `niveau de detail`, `diagramme`, `format`, `public vise`, `objectif`, `Exclusion` et `commentaires`.
+`get_json_resume(...)` transforme ces reponses en JSON normalise.
+
+`write_section(...)` redige une section Markdown a partir :
+
+- du plan de section ;
+- des resumes de fichiers associes ;
+- de l'arborescence si elle est utile a cette section ;
+- des preferences utilisateur conservees.
+
+`write_all_sections(...)` ecrit les fichiers `partie_1.md`, `partie_2.md`, etc. dans le dossier de process courant.
+
+Fonctions d'export :
+
+- `md_export(...)` concatene les sections en `documentation.md` ;
+- `convert_to_docx(...)` convertit les sections en `documentation.docx` avec Pypandoc ;
+- `convert_to_odt(...)` convertit les sections en `documentation.odt` avec Pypandoc ;
+- `export(...)` choisit l'export selon le format demande.
+
+Pour `docx` et `odt`, Pandoc doit etre disponible sur la machine, et les fichiers de reference attendus par le code doivent exister dans le dossier de sortie.
 
 ### `app/utils.py`
 
-Ce module contient la majorite de la logique du prototype.
+Ce module contient la majeure partie de la logique documentaire.
 
 Exploration :
 
-- `make_inventory(repo_root)` change le dossier courant vers la racine cible, puis lance l'inventaire.
-- `load_gitignore(spec)` lit le `.gitignore` de la racine cible et ajoute aussi des exclusions fixes : `assets`, `*.pdf`, `test*`, `.git`.
-- `list_files(repo_root)` construit une structure JSON avec deux vues :
-  - `tree`, une arborescence imbriquee ;
-  - `files`, un dictionnaire indexe par chemin relatif en minuscules.
+- `make_inventory(repo_root)` place le processus dans la racine cible puis lance l'inventaire.
+- `load_gitignore(spec)` lit le `.gitignore` cible et ajoute des exclusions fixes : `assets`, `*.pdf`, `test*`, `.git`.
+- `list_files(repo_root)` construit une structure `tree` et un index `files`.
 
-Chaque fichier inventorie contient :
+Chaque fichier inventorie contient notamment :
 
 ```json
 {
@@ -105,50 +125,59 @@ Chaque fichier inventorie contient :
 }
 ```
 
-Analyse et planification :
+Planification :
 
 - `readme_usefulness(...)` classe le README cible comme `utile`, `insuffisant`, `inutile` ou `empty`.
-- `get_meaningful_list(...)` demande au LLM une liste de 2 a 8 fichiers importants, a partir de l'arborescence.
-- `create_plan(...)` resume les fichiers importants, injecte les preferences utilisateur et produit un plan JSON.
+- `get_meaningful_list(...)` selectionne 2 a 8 fichiers utiles en tenant compte de l'arborescence et des preferences utilisateur.
+- `create_plan(...)` resume les fichiers importants et produit un plan JSON detaille.
 
 Scoring et association :
 
-- `score(...)` calcule un score heuristique selon le chemin, le nom du fichier, l'extension et le nombre de lignes.
-- `resume(...)` demande au LLM un resume dense et fidele d'un fichier.
-- `associate(...)` associe un fichier resume a une ou plusieurs sections du plan.
-- `decide(...)` traite les fichiers au score intermediaire en demandant au LLM s'ils sont utiles.
-- `score_resume_associate(...)` orchestre ces comportements selon un mode : `resume`, `associate` ou `full`.
+- `discover_and_adapt_environment(...)` demande au LLM d'adapter les bonus de scoring au projet et au plan.
+- `score(...)` calcule un score heuristique avec bonus de chemin, nom, extension et taille.
+- `resume(...)` produit un resume dense et fidele d'un fichier.
+- `associate(...)` associe un fichier resume a une ou plusieurs sections.
+- `decide(...)` traite les fichiers au score intermediaire en lisant leur contenu.
+- `classify_tree(...)` associe l'arborescence aux sections qui en ont besoin.
+- `classify_all_docs(...)` applique le scoring, les resumes et les associations sur toute la codebase.
+- `score_resume_associate(...)` orchestre ces comportements selon le mode `resume`, `associate` ou `full`.
 
-Les seuils actuels sont :
+Seuils actuels :
 
 - `SCORE_SEUIL_HAUT = 70`
 - `SCORE_SEUIL_BAS = 40`
 
 ### `app/main.py`
 
-`main.py` assemble les briques du workflow :
+`main.py` assemble le pipeline :
 
-1. generation d'un `workflow_id` ;
-2. inventaire d'une codebase cible ;
-3. questions utilisateur ;
-4. evaluation du README ;
-5. selection des fichiers utiles ;
-6. creation du plan ;
-7. association de certains fichiers aux sections.
+1. cree un `workflow_id` ;
+2. construit l'inventaire de la codebase cible ;
+3. conserve une copie pure de l'inventaire ;
+4. interroge l'utilisateur ;
+5. evalue le README ;
+6. selectionne les fichiers importants ;
+7. cree le plan ;
+8. adapte les regles de scoring ;
+9. classe et associe tous les documents ;
+10. redige toutes les sections ;
+11. exporte le resultat final.
 
-Le fichier est encore experimental. La racine analysee est actuellement codee en dur dans `main.py` et doit etre adaptee avant usage sur une autre codebase.
+La racine cible est encore codee en dur dans `main.py`. Elle doit etre modifiee avant usage sur un autre projet.
 
 ## Installation
 
-Creer un environnement Python, puis installer les dependances :
+Installer les dependances Python :
 
 ```powershell
 pip install -r requirements.txt
 ```
 
+Pour les exports `docx` et `odt`, installer aussi Pandoc si la distribution locale de Pypandoc ne le fournit pas.
+
 ## Configuration
 
-Creer un fichier `.env` local avec les variables necessaires aux appels Ollama et Langfuse. Ce fichier est ignore par Git.
+Creer un fichier `.env` local. Il est ignore par Git.
 
 Variables utilisees directement par le code :
 
@@ -169,28 +198,30 @@ Point d'entree principal :
 python app/main.py
 ```
 
-Attention : avant de lancer ce script, modifier dans `app/main.py` le chemin passe a `make_inventory(...)` pour pointer vers la codebase a documenter.
+Avant lancement, adapter dans `app/main.py` le chemin passe a `make_inventory(...)`. Il doit pointer vers la racine du projet a documenter, idealement le dossier qui contient le `.gitignore` de ce projet.
 
-Pour tester l'inventaire depuis le module utilitaire :
+## Sorties
 
-```powershell
-python app/utils.py
-```
+Le workflow ecrit les sections sous forme de fichiers Markdown `partie_1.md`, `partie_2.md`, etc., puis produit une documentation finale selon le format demande :
 
-Le module `utils.py` ne contient toutefois pas de bloc `if __name__ == "__main__"` dedie ; cette commande ne produit donc pas de test complet dans l'etat actuel.
+- `documentation.md`
+- `documentation.docx`
+- `documentation.odt`
+
+Ces sorties sont considerees comme des artefacts locaux et ne sont pas versionnees.
 
 ## Exclusions
 
-L'exploration repose sur le `.gitignore` du projet cible. Il faut donc fournir a `make_inventory(...)` la racine du dossier qui contient ce `.gitignore`.
+L'exploration repose sur le `.gitignore` du projet cible. Si la racine fournie ne contient pas le bon `.gitignore`, les exclusions peuvent etre fausses.
 
-Si la racine fournie n'est pas la bonne, les exclusions peuvent etre incompletes ou incorrectes.
-
-Exclusions ajoutees par le code en plus du `.gitignore` :
+Exclusions ajoutees par le code :
 
 - `.git`
 - `assets`
 - `test*`
 - `*.pdf`
+
+Le `.gitignore` du projet DocumentationAgent exclut aussi les sorties locales et de process, notamment `app/process/*.md`.
 
 ## Consommation de tokens
 
@@ -202,7 +233,7 @@ Exclusions ajoutees par le code en plus du `.gitignore` :
 - resume par fichier ;
 - generation du plan.
 
-La consommation depend surtout de la taille de l'arborescence, du README et du nombre de fichiers resumes.
+La consommation depend surtout de la taille de l'arborescence, du README, du nombre de fichiers resumes et de la longueur des sections generees.
 
 ## Etat d'avancement
 
@@ -215,17 +246,22 @@ Deja present :
 - inventaire de fichiers avec respect du `.gitignore` ;
 - evaluation du README ;
 - selection de fichiers importants ;
+- adaptation LLM des regles de scoring ;
 - scoring heuristique ;
 - resume de fichiers ;
 - association fichier/section ;
-- generation d'un plan JSON.
+- association de l'arborescence ;
+- generation d'un plan JSON ;
+- redaction de sections Markdown ;
+- export `md`, `docx`, `odt`.
 
 A faire :
 
-- finaliser l'association de tous les fichiers au plan ;
-- implementer la redaction des sections ;
-- implementer la review globale ;
-- exporter le document final (`md`, `txt`, `docx`, `odt`) ;
+- parametrer proprement la racine cible au lieu d'un chemin code en dur ;
+- ajouter une review globale des sections generees ;
+- reduire les repetitions entre sections ;
 - ajouter des tests automatises ;
-- ameliorer le scoring avec une detection de stack, d'imports et d'entrees applicatives ;
-- eventuellement passer les appels LLM en asynchrone si le fournisseur utilise accepte les requetes paralleles.
+- durcir la gestion des erreurs JSON et des reponses LLM invalides ;
+- clarifier les chemins de sortie ;
+- ameliorer le scoring avec des imports, entrypoints et signaux propres a chaque stack ;
+- eventuellement passer certains appels LLM en asynchrone si le fournisseur accepte les requetes paralleles.

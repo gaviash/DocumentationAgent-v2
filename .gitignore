@@ -1,9 +1,10 @@
 .venv
 __pycache__
 .env
-process
 docs
 .ruff_cache
 docsgen
 test.py
 logs.log 
+little_agent
+app/process/*.md

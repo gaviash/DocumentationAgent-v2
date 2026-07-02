@@ -86,13 +86,13 @@ def write_section(section : str,doc_list : list[str],database_files : dict,pure_
     -Le but n'est pas de repeter mecaniquement le plan,mais de partir du plan pour rediger la section finale.
     -Ecris avec une belle mise en page markdown,propre,lisible,sans trop de titres partout,juste ce qu'il faut.Si besoin tu peux integrer des snippets/blocs de code.
     -N'invente rien,aucune api,aucune variable,comportement,fonction,ou quelconque element sur lequel tu n'as pas d'informations.
-    -Ne te repete pas.Apporte quelque chose de nouveau a chaque phrase.
+    -Ne te repete pas.Apporte quelque chose de nouveau a chaque phrase.Pas besoin de faire des longueurs inutilement.
     -Quand une information serait utile a verifier,ou a creuser pour l'utilisateur(ex : verifier un endpoint,un comportement d'une fonction,etc),precise la reference au fichier
     de tes informations. 
     -Commence ta section par le titre de la section.
     -Quand tu as un/des diagrammes mermaid a faire,fais particulierement attention a la syntaxe.Pas de syntaxe trop compliquée on veut eviter la casse.
-    -Ne mets des diagrammes que si c'est necessaire/apporte quelque chose.
-    -Tu écris tes sections toujours en francais
+    -Ne mets des diagrammes que si c'est necessaire/apporte quelque chose,ou si c'est inclus dans le plan.
+    -Tu écris tes sections toujours en francais.
     """
     text = query(msg=msg,llm=first_model,workflow_run_id=workflow_run_id,tag="writing")
     return text
@@ -122,6 +122,34 @@ def convert_to_docx(section_number : int):
     )
     pass
 
+def convert_to_odt(section_number : int):
+    pypandoc.convert_file(
+        source_file=[f"../partie_{i}.md" for i in range(1,section_number+1)],
+        to="odt",
+        format="markdown+pipe_tables+fenced_code_blocks+fenced_divs+smart",
+        outputfile=Path("../documentation.odt"),
+        extra_args= [
+            "--toc",
+            "--reference-doc=../reference-doc.odt",
+        ]
+    )
+
+def md_export(section_number : int):
+    out = Path("../documentation.md")
+    with out.open("w",encoding="utf-8") as output :
+        for i in range(1,section_number+1):
+            output.write(Path(f"../partie_{i}.md").read_text(encoding="utf-8"))
+            output.write("\n\n")
+            
+def export(format : str,section_number : int):
+    match format :
+        case "docx" :
+            convert_to_docx(section_number=section_number)
+        case "md" :
+            md_export(section_number=section_number)
+        case "odt" :
+            convert_to_odt(section_number=section_number)
+        
 """
 Step 1 (brainstorm) : 
 -> res = get json resume 
