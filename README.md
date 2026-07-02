@@ -36,6 +36,8 @@ Cette documentation couvre les fichiers suivis par Git. Les fichiers locaux, sec
 | `app/model.py` | Configure les clients Ollama, charge l'environnement, instrumente les appels avec Langfuse et fournit `query` / `query_json`. |
 | `app/steps.py` | Gere les questions utilisateur, la redaction des sections et les exports `md`, `docx`, `odt`. |
 | `app/utils.py` | Contient l'exploration de fichiers, la lecture du `.gitignore`, le scoring, les resumes, les associations fichier/section et la creation du plan. |
+| `app/process/reference-doc.docx` | Fichier de reference Pandoc utilise comme modele de styles pour l'export `docx`. |
+| `app/process/reference-doc.odt` | Fichier de reference Pandoc utilise comme modele de styles pour l'export `odt`. |
 | `bloc-notes.txt` | Notes de conception sur le workflow cible, les arbitrages de scoring et les futures evolutions. |
 | `token_consumption.md` | Estimation de consommation de tokens par etape. |
 | `README.md` | Documentation du projet. |
@@ -97,7 +99,10 @@ Fonctions d'export :
 - `convert_to_odt(...)` convertit les sections en `documentation.odt` avec Pypandoc ;
 - `export(...)` choisit l'export selon le format demande.
 
-Pour `docx` et `odt`, Pandoc doit etre disponible sur la machine, et les fichiers de reference attendus par le code doivent exister dans le dossier de sortie.
+Pour `docx` et `odt`, Pandoc doit etre disponible sur la machine. Les exports utilisent les fichiers de reference versionnes dans `app/process` :
+
+- `app/process/reference-doc.docx`
+- `app/process/reference-doc.odt`
 
 ### `app/utils.py`
 
@@ -208,7 +213,7 @@ Le workflow ecrit les sections sous forme de fichiers Markdown `partie_1.md`, `p
 - `documentation.docx`
 - `documentation.odt`
 
-Ces sorties sont considerees comme des artefacts locaux et ne sont pas versionnees.
+Les sections et documents finaux generes sont consideres comme des artefacts locaux et ne sont pas versionnes. Les fichiers `app/process/reference-doc.docx` et `app/process/reference-doc.odt`, eux, sont des templates Pandoc versionnes.
 
 ## Exclusions
 
@@ -221,7 +226,7 @@ Exclusions ajoutees par le code :
 - `test*`
 - `*.pdf`
 
-Le `.gitignore` du projet DocumentationAgent exclut aussi les sorties locales et de process, notamment `app/process/*.md`.
+Le `.gitignore` du projet DocumentationAgent exclut aussi les sorties locales et de process, notamment `app/process/*.md`. Les fichiers de reference Pandoc de `app/process` ne sont pas ignores.
 
 ## Consommation de tokens
 
